@@ -131,3 +131,24 @@ Return a new version of the code that fulfills the task description. Only return
         result = result.split("\n")[1:-1]
         result = "\n".join(result)
     return result
+
+
+def generate_analysis(task_description, new_code, build_output):
+
+    prompt = f"""
+You are a software engineering assistant. You were given some code and a task description on how to modify it.
+
+Here was the task description:
+{task_description}
+
+Here was the code you generated:
+{new_code}
+
+The stderr from compiling the code was:
+{build_output}
+
+Based on this information, do you think the modification worked without introducing any significant NEW issues, including easy-to-fix warnings?
+If you think yes, return "good" ONLY. If you think it didn't work, return "bad: " plus a new task description, which should replace the old task description with a new one that would generate successful code. Do not explain any reasoning.
+"""
+
+    return call_openai_api(prompt)
