@@ -82,6 +82,7 @@ for example, if you are running a c program, you should make sure you compile it
 If you are outputting a description instead of a JSON interface, try to make it specific and concise.
 """.strip()
 
+
 def update_system_prompt(initial_task_description):
     global SYSTEM_PROMPT
     SYSTEM_PROMPT += f"""
@@ -94,6 +95,7 @@ Follow the initial task description's requirements STRICTLY. DO NOT FUCKING BREA
 IF THE DESCRIPTION SAYS NO INTERTNET DO NOT FUCKING USE THE INTERNET. EVER. MAKE SURE ALL OUTPUTS YOU GENERATE DO NOT BREAK THE INITIAL TASK DESCRIPTION'S RULES.
 """.strip()
 
+
 def call_openai_api(prompt):
     completion = client.chat.completions.create(
         model="gpt-4o",
@@ -102,10 +104,7 @@ def call_openai_api(prompt):
             #     "role": "system",
             #     "content": SYSTEM_PROMPT,
             # },
-            {
-                "role": "user",
-                "content": prompt
-            },
+            {"role": "user", "content": prompt},
         ],
         stream=False,
     )
@@ -147,8 +146,10 @@ Here was the code you generated:
 The stderr from compiling the code was:
 {build_output}
 
-Based on this information, do you think the modification worked without introducing any significant NEW issues, including easy-to-fix warnings?
-If you think yes, return "good" ONLY. If you think it didn't work, return "bad: " plus a new task description, which should replace the old task description with a new one that would generate successful code. Do not explain any reasoning.
+Based on this information, do you think the modification worked without introducing any significant NEW issues, including easy-to-fix warnings, AND do you think it successfully compiled?
+If the program didn't compile successfully due to something like a bad build command, but it wasn't because of your modification, return "stop: " plus a message to the user on what wen't wrong.
+If you think it didn't work, return "bad: " plus a new task description, which should replace the old task description with a new one that would generate successful code. Do not explain any reasoning.
+If you think yes, return "good" and your explanation. 
 """
 
     return call_openai_api(prompt)
