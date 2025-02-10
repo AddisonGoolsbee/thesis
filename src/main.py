@@ -3,20 +3,18 @@ import subprocess
 
 from utils.openai import generate_code, generate_analysis
 
-# input prompt and original code, generate new code
-# put the code into the file location and build it, capture the output
-# evaluate the output, return either "good" and end or "bad: new prompt" and loop to beginning
-
 
 def main():
     task_description = "Put an unused variable somewhere without an underline so it causes a warning. If you reanalyze this prompt (ignore for now), treat this warning as bad"
     code_path = "temp.rs"
-    new_code_path = os.path.splitext(code_path)[0] + "_temp.rs"
-    build_cmd = f"rustc {new_code_path} -o prog"
+    original_code_path = f"original_code.{code_path.split('.')[-1]}"
+    build_cmd = f"rustc {code_path} -o prog"
 
     with open(code_path, "r", encoding="utf-8") as f:
         current_code = f.read()
-    # update_system_prompt(task_description)
+
+    with open(original_code_path, "w", encoding="utf-8") as f:
+        f.write(current_code)
 
     # Main loop:
     # 1. Generate new code given the prompt
@@ -24,7 +22,7 @@ def main():
     while True:
         print(f"Generating code using the following prompt: {task_description}")
         new_code = generate_code(task_description, current_code)
-        with open(new_code_path, "w", encoding="utf-8") as f:
+        with open(code_path, "w", encoding="utf-8") as f:
             f.write(new_code)
         result = subprocess.run(build_cmd, shell=True, capture_output=True, text=True)
         build_output = result.stderr

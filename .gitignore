@@ -4,3 +4,4 @@ temp*
 .DS_Store
 .env
 prog
+original_code.rs
