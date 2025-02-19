@@ -1,12 +1,9 @@
-import json
 from dotenv import load_dotenv
 import openai
 import os
 from unidiff import PatchSet
 from io import StringIO
 import re
-from diff_match_patch import diff_match_patch
-import urllib
 
 load_dotenv()
 openai.api_key = os.getenv("OPENAI_API_KEY")
@@ -118,78 +115,94 @@ def call_openai_api(prompt):
     return completion.choices[0].message.content
 
 
-def apply_diff(current_code: str, patch_list: list) -> str:
-    dmp = diff_match_patch()
+def apply_diff(current_code: str, diff_text: str) -> str:
+    # Ensure diff_text has headers
+    if not diff_text.startswith("---"):
+        diff_text = "--- a\n+++ b\n" + diff_text
 
-    # Convert patch list to a format usable by diff_match_patch
-    diffs = []
-    for patch in patch_list:
-        if patch["op"] == "equal":
-            diffs.append((0, patch["text"]))  # No change
-        elif patch["op"] == "insert":
-            diffs.append((1, patch["text"]))  # Insert
-        elif patch["op"] == "delete":
-            diffs.append((-1, patch["text"]))  # Delete
+    # Ensure every hunk header (@@ -x,y +x,y @@) is followed by a newline
+    diff_text = re.sub(r"(@@ [^@]+ @@)(?!\n)", r"\1\n", diff_text)
 
-    # Generate and apply patches
-    patches = dmp.patch_make(current_code, diffs)
-    print("HERE")
-    patchText = dmp.patch_toText(patches)
-    print(urllib.parse.unquote(patchText))
-    print("END")
-    new_code, _ = dmp.patch_apply(patches, current_code)
+    with open("temp2.txt", "w") as f:
+        f.write(diff_text)
 
-    return new_code
+    # Parse the diff
+    patch = PatchSet(StringIO(diff_text))
+
+    if not patch:
+        raise ValueError("Parsed diff is empty. Ensure valid unified diff format with file headers.")
+
+    # Convert current code to a list of lines
+    lines = current_code.splitlines(keepends=True)
+
+    # Track line offset adjustments
+    line_offset = 0
+
+    for patched_file in patch:
+        for hunk in patched_file:
+            start = hunk.source_start - 1 + line_offset  # Convert to 0-based index
+            new_lines = []
+
+            for line in hunk:
+                if line.is_added:
+                    new_lines.append(line.value)  # Add new line
+                    line_offset += 1
+                elif line.is_removed:
+                    line_offset -= 1  # Track removed lines
+                else:
+                    new_lines.append(line.value)  # Keep unchanged lines
+
+            # Apply changes
+            lines[start : start + hunk.source_length] = new_lines
+
+    return "".join(lines)
 
 
 def generate_code(task_description, current_code):
 
+    numbered_code = "\n".join(f"{i + 1:3d} | {line}" for i, line in enumerate(current_code.split("\n")))
+
     prompt = f"""
 You are a software engineering assistant. You are given some code and a task description on how to modify it.
-
-Here is the code:
-{current_code}
+Here is the code (each line is prefixed with its line number for reference):
+{numbered_code}
 
 Here is the task description:
 {task_description}
 
-Provide a list of text-based edits in the JSON format using Google's diff-match-patch structure.
-Example output:
-[
-  {{"op": "equal", "text": "def foo():\n    return "}},
-  {{"op": "delete", "text": "42"}},
-  {{"op": "insert", "text": "43"}},
-  {{"op": "equal", "text": "\n"}}
-]
+Ensure:
+- The diff correctly references the provided line numbers.
+- The output follows the correct unidiff format.
+- Each hunk includes at least one unchanged line before and after modifications.
+- A hunk should never have `x,0` (no removed lines), as it provides no context.
+- If you're starting at the top of the file, the line should be -1, not 0
 
-Ensure that the output is a valid JSON array of objects, where each object has an "op" key with a value of "equal", "delete", or "insert", and a "text" key with the text to be inserted or deleted.
-Every delete or insert operation should be flanked by an equal operation on either side, and "" if it's at the beginning or end of the code.
-"equal" operations should be no longer than 3 lines.
-Make sure there are no redundant "equal" operations. Equal operations should only be used to give context to insertions and deletions.
-Only return the json array, with no explanation
+Provide a unified diff (python unidiff style) showing the changes from the provided code code to implement the task description. Only output the diff.
+Here is an example of a unified diff:
+@@ -1,2 +1,2 @@
+ def add(a, b):
+-    return a + b
++    return a - b
+
+@@ -257,2 +258,3 @@
+     /// Some other comment
++    /// Just making sure you're paying attention down here! 😉
+     impl ObjMapper {{
+
+Important: The line numbers are **only for reference**. Do not include them in the actual diff output.
 """
     result = call_openai_api(prompt)
-    print("going now")
-
     if result.startswith("```"):
         result = result.split("\n")[1:-1]
         result = "\n".join(result)
     if result.endswith("```"):
         result = result.split("\n")[:-1]
         result = "\n".join(result)
-
-    with open("temp2.json", "w") as f:
-        f.write(result)
-    
-    try:
-        patch = json.loads(result)
-    except json.JSONDecodeError:
-        raise ValueError("GPT returned an invalid JSON format")
-
-    new_code = apply_diff(current_code, patch)
+    # print('\n' + result)
+    new_code = apply_diff(current_code, result)
     with open("temp.txt", "w") as f:
         f.write(new_code)
-    print('\n'.join(new_code.split('\n')[:5]))
+    print("\n".join(new_code.split("\n")[:5]))
     return new_code
 
 
