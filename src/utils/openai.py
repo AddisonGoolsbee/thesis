@@ -1,6 +1,9 @@
-from dotenv import load_dotenv, find_dotenv
+from dotenv import load_dotenv
 import openai
 import os
+from unidiff import PatchSet
+from io import StringIO
+import re
 
 load_dotenv()
 openai.api_key = os.getenv("OPENAI_API_KEY")
@@ -112,6 +115,49 @@ def call_openai_api(prompt):
     return completion.choices[0].message.content
 
 
+def apply_diff(current_code: str, diff_text: str) -> str:
+    # Ensure diff_text has headers
+    if not diff_text.startswith('---'):
+        diff_text = '--- a\n+++ b\n' + diff_text
+
+    # Ensure every hunk header (@@ -x,y +x,y @@) is followed by a newline
+    diff_text = re.sub(r"(@@ [^@]+ @@)(?!\n)", r"\1\n", diff_text)
+
+    with open("temp2.txt", "w") as f:
+        f.write(diff_text)
+
+    # Parse the diff
+    patch = PatchSet(StringIO(diff_text))
+
+    if not patch:
+        raise ValueError("Parsed diff is empty. Ensure valid unified diff format with file headers.")
+
+    # Convert current code to a list of lines
+    lines = current_code.splitlines(keepends=True)
+
+    # Track line offset adjustments
+    line_offset = 0
+
+    for patched_file in patch:
+        for hunk in patched_file:
+            start = hunk.source_start - 1 + line_offset  # Convert to 0-based index
+            new_lines = []
+
+            for line in hunk:
+                if line.is_added:
+                    new_lines.append(line.value)  # Add new line
+                    line_offset += 1
+                elif line.is_removed:
+                    line_offset -= 1  # Track removed lines 
+                else:
+                    new_lines.append(line.value)  # Keep unchanged lines
+
+            # Apply changes
+            lines[start : start + hunk.source_length] = new_lines  
+
+    return "".join(lines)
+
+
 def generate_code(task_description, current_code):
 
     prompt = f"""
@@ -122,14 +168,34 @@ Here is the code:
 Here is the task description:
 {task_description}
 
-Return a new version of the code that fulfills the task description. Only return the code, not any additional explanations.
-"""
+Provide a unified diff (python unidiff style) showing the changes from the provided code code to implement the task description. Only output the diff.
+Here is an example of a unified diff:
+@@ -1,2 +1,2 @@
+ def add(a, b):
+-    return a + b
++    return a - b
 
+@@ -257,1 +258,3 @@
+     /// Some other comment
++    /// Just making sure you're paying attention down here! 😉
+     impl ObjMapper {{
+
+Ensure each hunk includes at least one unchanged line before and after modifications. 
+A hunk should never have `x,0` (no removed lines), as it provides no context.
+"""
     result = call_openai_api(prompt)
     if result.startswith("```"):
         result = result.split("\n")[1:-1]
         result = "\n".join(result)
-    return result
+    if result.endswith("```"):
+        result = result.split("\n")[:-1]
+        result = "\n".join(result)
+    # print('\n' + result)
+    new_code = apply_diff(current_code, result)
+    with open("temp.txt", "w") as f:
+        f.write(new_code)
+    print('\n'.join(new_code.split('\n')[:5]))
+    return new_code
 
 
 def generate_analysis(task_description, new_code, build_output):

@@ -5,7 +5,7 @@ from utils.io import Timer
 
 
 def main():
-    task_description = "Add a funny comment to the top of the code"
+    task_description = "Add a funny comment to the top of the code and add one comment line to the middle of the code"
     # code_path = "temp.rs"
     code_path = "/Users/addisongoolsbee/Desktop/Theseus/kernel/e1000/src/lib.rs"
     original_code_path = f"original.rs"
@@ -22,10 +22,19 @@ def main():
     # Main loop:
     # 1. Generate new code given the prompt
     # 2. If it compiles, you're done. Otherwise, generate new prompt and go back to 1
+    MAX_RETRIES = 5
     while True:
         print("Prompt: ", task_description)
         with Timer("Generating..."):
-            new_code = generate_code(task_description, current_code)
+            for attempt in range(1, MAX_RETRIES + 1):
+                try:
+                    new_code = generate_code(task_description, current_code)
+                    break
+                except Exception as e:
+                    print(f"\nError: {e} (Attempt {attempt}/{MAX_RETRIES})")
+                    if attempt == MAX_RETRIES:
+                        print("Max retries reached. Aborting.")
+                        exit(1)
 
         with open(code_path, "w", encoding="utf-8") as f:
             f.write(new_code)
