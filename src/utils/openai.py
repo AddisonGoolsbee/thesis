@@ -1,9 +1,8 @@
+import json
 from dotenv import load_dotenv
 import openai
 import os
-from unidiff import PatchSet
-from io import StringIO
-import re
+import ast
 
 load_dotenv()
 openai.api_key = os.getenv("OPENAI_API_KEY")
@@ -115,81 +114,64 @@ def call_openai_api(prompt):
     return completion.choices[0].message.content
 
 
-def apply_diff(current_code: str, diff_text: str) -> str:
-    # Ensure diff_text has headers
-    if not diff_text.startswith("---"):
-        diff_text = "--- a\n+++ b\n" + diff_text
+def parse_and_validate_tuples(data: str):
+    try:
+        parsed_data = ast.literal_eval(repr(data))
+        if not (
+            isinstance(parsed_data, list)
+            and all(isinstance(t, tuple) and len(t) == 2 and all(isinstance(s, str) for s in t) for t in parsed_data)
+        ):
+            raise ValueError("Invalid format: Expected a list of tuples with exactly two strings each.")
 
-    # Ensure every hunk header (@@ -x,y +x,y @@) is followed by a newline
-    diff_text = re.sub(r"(@@ [^@]+ @@)(?!\n)", r"\1\n", diff_text)
+        return parsed_data
+    except (SyntaxError, ValueError) as e:
+        raise ValueError(f"Error parsing input: {e}")
 
-    with open("temp2.txt", "w") as f:
-        f.write(diff_text)
 
-    # Parse the diff
-    patch = PatchSet(StringIO(diff_text))
+def apply_changes(current_code: str, changes: str) -> str:
+    with open("temp.txt", "w") as f:
+        f.write(changes)
+    
+    print(repr(changes))
+    changes = parse_and_validate_tuples(changes)
+    with open("temp3.txt", "w") as f:
+        f.write(changes)
 
-    if not patch:
-        raise ValueError("Parsed diff is empty. Ensure valid unified diff format with file headers.")
+    for replacement in changes:
+        print(replacement)
+        if len(replacement) != 2:
+            raise ValueError(f"Replacement tuple must have 2 values: {replacement}")
+        if replacement[0] not in current_code:
+            raise ValueError(f"Replacement string not found in code: {replacement[0]}")
+        current_code = current_code.replace(replacement[0], replacement[1])
 
-    # Convert current code to a list of lines
-    lines = current_code.splitlines(keepends=True)
-
-    # Track line offset adjustments
-    line_offset = 0
-
-    for patched_file in patch:
-        for hunk in patched_file:
-            start = hunk.source_start - 1 + line_offset  # Convert to 0-based index
-            new_lines = []
-
-            for line in hunk:
-                if line.is_added:
-                    new_lines.append(line.value)  # Add new line
-                    line_offset += 1
-                elif line.is_removed:
-                    line_offset -= 1  # Track removed lines
-                else:
-                    new_lines.append(line.value)  # Keep unchanged lines
-
-            # Apply changes
-            lines[start : start + hunk.source_length] = new_lines
-
-    return "".join(lines)
+    return current_code
 
 
 def generate_code(task_description, current_code):
 
-    numbered_code = "\n".join(f"{i + 1:3d} | {line}" for i, line in enumerate(current_code.split("\n")))
-
     prompt = f"""
 You are a software engineering assistant. You are given some code and a task description on how to modify it.
-Here is the code (each line is prefixed with its line number for reference):
-{numbered_code}
+{current_code}
 
 Here is the task description:
 {task_description}
 
+Instead of providing new code, provide a set of tuples that represent replacements made to the code. The first value is the original string, and the second value is the new string.
+
+Here is an example of a set of replacements:
+
+[
+    ("def simple():\n    return a + b", "def simple():\n    return a - b"),
+    ("impl RxQueueRegisters for E1000RxQueueRegisters {{\n    fn set_rdbal(&mut self, value: u32) {{\n        self.0.rx_regs.rdbal.write(value); ", "impl RxQueueRegisters for E1000RxQueueRegisters {{\n    fn set_rdbal(&mut self, value: u32) {{\n        self.0.rx_regs.rdbal.write(value); \n    debug!("Wrote {{}}, value);"),
+    ("use std::collections::HashMap;\nuse std::collections::BTreeMap;", "use std::collections::HashMap;"), // this would remove the BTreeMap import
+]
+
 Ensure:
-- The diff correctly references the provided line numbers.
-- The output follows the correct unidiff format.
-- Each hunk includes at least one unchanged line before and after modifications.
-- A hunk should never have `x,0` (no removed lines), as it provides no context.
-- If you're starting at the top of the file, the line should be -1, not 0
+- There should be several lines of context that do not get changed in each replacement tuple, so an exact string match can easily be found.
+- The replacements should be in the order they appear in the code.
 
-Provide a unified diff (python unidiff style) showing the changes from the provided code code to implement the task description. Only output the diff.
-Here is an example of a unified diff:
-@@ -1,2 +1,2 @@
- def add(a, b):
--    return a + b
-+    return a - b
-
-@@ -257,2 +258,3 @@
-     /// Some other comment
-+    /// Just making sure you're paying attention down here! 😉
-     impl ObjMapper {{
-
-Important: The line numbers are **only for reference**. Do not include them in the actual diff output.
+Only return the list of replacements, do not add comments or labels
 """
     result = call_openai_api(prompt)
     if result.startswith("```"):
@@ -198,11 +180,10 @@ Important: The line numbers are **only for reference**. Do not include them in t
     if result.endswith("```"):
         result = result.split("\n")[:-1]
         result = "\n".join(result)
-    # print('\n' + result)
-    new_code = apply_diff(current_code, result)
-    with open("temp.txt", "w") as f:
+    new_code = apply_changes(current_code, result)
+    with open("temp2.txt", "w") as f:
         f.write(new_code)
-    print("\n".join(new_code.split("\n")[:5]))
+    exit(0)
     return new_code
 
 
