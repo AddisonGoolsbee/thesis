@@ -5,7 +5,7 @@ from utils.io import Timer
 
 
 def main():
-    task_description = "Add a funny comment to the top of the code and add one comment line to the middle of the code"
+    task_description = "Reorder a few lines of code in a way that it won't affect the code's functionality."
     # code_path = "temp.rs"
     code_path = "/Users/addisongoolsbee/Desktop/Theseus/kernel/e1000/src/lib.rs"
     original_code_path = f"original.rs"

@@ -46,7 +46,6 @@ def call_openai_api_for_patch(prompt):
 def apply_changes(current_code: str, changes: str) -> str:
     changes = json.loads(changes)
     for replacement in changes["replacements"]:
-        print(replacement)
         if replacement["original"] not in current_code:
             raise ValueError(f"Replacement string not found in code: {replacement['original']}")
         current_code = current_code.replace(replacement["original"], replacement["new"])
