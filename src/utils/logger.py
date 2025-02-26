@@ -1,6 +1,6 @@
 import os
 import re
-import shutil
+import json
 
 class Logger:
     _instance = None
@@ -47,7 +47,7 @@ class Logger:
 
     def log_generated_code(self, replacements, new_code, attempt_num):
         with open(os.path.join(self.goal_path, f"replacements{self.prompt_num}.json"), "w") as f:
-            f.write(replacements)
+            json.dump(json.loads(replacements), f, indent=4)
         with open(os.path.join(self.goal_path, f"code{self.prompt_num}.rs"), "w") as f:
             f.write(new_code)
         self.prompt_num = f"{(int(self.prompt_num) + 1):03d}"
