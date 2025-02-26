@@ -2,13 +2,13 @@ import subprocess
 
 from utils.openai import generate_code, generate_analysis
 from utils.io import Timer
+from utils.logger import Logger
 
 
 def main():
     task_description = "Reorder a few lines of code in a way that it won't affect the code's functionality."
     # code_path = "temp.rs"
     code_path = "/Users/addisongoolsbee/Desktop/Theseus/kernel/e1000/src/lib.rs"
-    original_code_path = f"original.rs"
     # build_cmd = f"rustc {code_path} -o prog"
     build_cmd = f"gmake iso -C /Users/addisongoolsbee/Desktop/Theseus/ net=user"
 
@@ -16,15 +16,14 @@ def main():
         current_code = f.read()
         new_code = current_code
 
-    with open(original_code_path, "w", encoding="utf-8") as f:
-        f.write(current_code)
+    logger = Logger(current_code)
 
     # Main loop:
     # 1. Generate new code given the prompt
     # 2. If it compiles, you're done. Otherwise, generate new prompt and go back to 1
+    logger.begin_goal(task_description)
     MAX_RETRIES = 5
     while True:
-        print("Prompt: ", task_description)
         with Timer("Generating..."):
             for attempt in range(1, MAX_RETRIES + 1):
                 try:

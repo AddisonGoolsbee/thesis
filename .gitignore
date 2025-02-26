@@ -5,3 +5,4 @@ temp*
 .env
 prog
 original*.rs
+log/

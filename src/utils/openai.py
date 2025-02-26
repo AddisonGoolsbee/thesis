@@ -2,13 +2,15 @@ import json
 from dotenv import load_dotenv
 import openai
 import os
-import ast
 from pydantic import BaseModel
+
+from utils.logger import Logger
 
 load_dotenv()
 openai.api_key = os.getenv("OPENAI_API_KEY")
 client = openai.OpenAI()
 
+logger = Logger()
 
 def call_openai_api(prompt):
     completion = client.chat.completions.create(
@@ -79,11 +81,8 @@ Ensure:
 Only return the list of replacements, do not add comments or labels
 """
     result = call_openai_api_for_patch(prompt)
-    with open("temp.json", "w") as f:
-        f.write(result)
     new_code = apply_changes(current_code, result)
-    with open("temp.txt", "w") as f:
-        f.write(new_code)
+    logger.log_generated_code(result, new_code)
     return new_code
 
 
