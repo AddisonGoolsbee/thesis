@@ -4,13 +4,9 @@ import openai
 import os
 from pydantic import BaseModel
 
-from utils.logger import Logger
-
 load_dotenv()
 openai.api_key = os.getenv("OPENAI_API_KEY")
 client = openai.OpenAI()
-
-logger = Logger()
 
 def call_openai_api(prompt):
     completion = client.chat.completions.create(
@@ -82,8 +78,7 @@ Only return the list of replacements, do not add comments or labels
 """
     result = call_openai_api_for_patch(prompt)
     new_code = apply_changes(current_code, result)
-    logger.log_generated_code(result, new_code)
-    return new_code
+    return new_code, result
 
 
 def generate_analysis(task_description, new_code, build_output):

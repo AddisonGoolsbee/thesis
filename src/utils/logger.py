@@ -1,26 +1,31 @@
 import os
 import re
+import shutil
 
 class Logger:
     _instance = None
 
-    def __new__(cls, initial_code=None):
+    def __new__(cls):
         if cls._instance is None:
             cls._instance = super(Logger, cls).__new__(cls)
         return cls._instance
 
-    def __init__(self, initial_code=None):
+    def __init__(self):
         if hasattr(self, "initialized"):
             return
         self.initialized = True
-        self.logger_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "log")
+        self.logger_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "log"))
         if not os.path.exists(self.logger_path):
             os.makedirs(self.logger_path)
 
-        file_path = os.path.join(self.logger_path, "original.rs")
-        if not os.path.exists(file_path):
-            with open(file_path, "w", encoding="utf-8") as f:
-                f.write(initial_code)
+        self.initial_path = "/Users/addisongoolsbee/Desktop/Theseus/kernel/e1000/src/lib.rs"
+        with open(self.initial_path, "r", encoding="utf-8") as f:
+            self.initial_code = f.read()
+
+        self.original_path = os.path.join(self.logger_path, "original.rs")
+        if not os.path.exists(self.original_path):
+            with open(self.original_path, "w", encoding="utf-8") as f:
+                f.write(self.initial_code)
 
         run_dirs = [d for d in os.listdir(self.logger_path) if re.fullmatch(r"run\d{3}", d)]
         next_run = f"{(max(map(lambda d: int(d[3:]), run_dirs), default=0) + 1):03d}"
@@ -37,12 +42,20 @@ class Logger:
         self.prompt_num = "001"
 
         with open(os.path.join(self.goal_path, "prompts.txt"), "w", encoding="utf-8") as f:
-            f.write(f"Prompt {int(self.prompt_num)}\n{prompt}")
+            f.write(f"Prompt {int(self.prompt_num)}\n{prompt}\n")
         print("Prompt: ", prompt)
 
-    def log_generated_code(self, replacements, new_code):
+    def log_generated_code(self, replacements, new_code, attempt_num):
         with open(os.path.join(self.goal_path, f"replacements{self.prompt_num}.json"), "w") as f:
             f.write(replacements)
         with open(os.path.join(self.goal_path, f"code{self.prompt_num}.rs"), "w") as f:
             f.write(new_code)
         self.prompt_num = f"{(int(self.prompt_num) + 1):03d}"
+
+        with open(os.path.join(self.goal_path, "prompts.txt"), "a", encoding="utf-8") as f:
+            f.write(f"Successful generation after {attempt_num} attempt(s)\n")
+
+    def log_status(self, status):
+        with open(os.path.join(self.goal_path, "prompts.txt"), "a", encoding="utf-8") as f:
+            f.write(status + '\n')
+        print(status)
