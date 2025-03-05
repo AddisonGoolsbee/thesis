@@ -3,7 +3,7 @@ import subprocess
 import time
 
 from utils.openai import generate_code, generate_analysis
-from utils.io import Timer
+from utils.io import Timer, run_command_with_timeout
 from utils.logger import Logger
 
 
@@ -65,37 +65,8 @@ def main():
             logger.log_status("Analysis unsuccessful, retrying...")
             continue
 
-        result_stdout = ""
         with Timer("Running basic test..."):
-            try:
-                process = subprocess.Popen(
-                    RUN_CMD,
-                    shell=True,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.STDOUT,
-                    text=True,
-                )
-                start_time = time.time()
-                output_lines = []
-                while process.poll() is None:  # While process is running
-                    line = process.stdout.readline()
-                    if line:
-                        output_lines.append(line)
-                        if RUN_EXPECTED_OUTPUT in line:
-                            process.kill()
-                            break
-                    if time.time() - start_time > RUN_TIMEOUT:
-                        raise subprocess.TimeoutExpired(RUN_CMD, RUN_TIMEOUT)
-
-                result_stdout = "".join(output_lines)
-
-            except subprocess.TimeoutExpired:
-                process.kill()
-                result_stdout = "".join(output_lines)  # Preserve collected output
-                result_stdout += f"\nTimeout of {RUN_TIMEOUT} seconds expired."
-
-        run_output = result_stdout
-        print(run_output)
+            run_output = run_command_with_timeout(RUN_CMD, RUN_TIMEOUT, RUN_EXPECTED_OUTPUT)
 
         if RUN_EXPECTED_OUTPUT in run_output:
             logger.log_status("Basic test ✅")
