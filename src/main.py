@@ -1,5 +1,6 @@
 import shutil
 import subprocess
+import time
 
 from utils.openai import generate_code, generate_analysis
 from utils.io import Timer
@@ -7,13 +8,18 @@ from utils.logger import Logger
 
 
 def main():
-    task_description = "Reorder a few lines of code in a way that it won't affect the code's functionality. And add a funny comment to the top"
-    # code_path = "temp.rs"
-    code_path = "/Users/addisongoolsbee/Desktop/Theseus/kernel/e1000/src/lib.rs"
-    # build_cmd = f"rustc {code_path} -o prog"
-    build_cmd = f"gmake iso -C /Users/addisongoolsbee/Desktop/Theseus/ net=user"
+    task_description = (
+        "Add a few comments here and there and reorder some lines where it won't change the functionality"
+    )
+    CODE_PATH = "temp.rs"
+    # CODE_PATH = "/Users/addisongoolsbee/Desktop/Theseus/kernel/e1000/src/lib.rs"
+    BUILD_CMD = f"rustc {CODE_PATH} -o prog"
+    # BUILD_CMD = f"gmake iso -C /Users/addisongoolsbee/Desktop/Theseus/ net=user"
+    RUN_CMD = f"./prog"
+    RUN_TIMEOUT = 10
+    RUN_EXPECTED_OUTPUT = "This is a simple Rust program."
 
-    with open(code_path, "r", encoding="utf-8") as f:
+    with open(CODE_PATH, "r", encoding="utf-8") as f:
         current_code = f.read()
         new_code = current_code
 
@@ -37,29 +43,68 @@ def main():
                         logger.log_status("Max code generation retries reached. Aborting.")
                         exit(1)
 
-        with open(code_path, "w", encoding="utf-8") as f:
+        with open(CODE_PATH, "w", encoding="utf-8") as f:
             f.write(new_code)
 
-        with Timer("Building......"):
-            result = subprocess.run(build_cmd, shell=True, capture_output=True, text=True)
-        build_output = f"[Return code: {result.returncode}]\n {result.stderr}"
+        with Timer("Building..."):
+            process = subprocess.run(BUILD_CMD, shell=True, capture_output=True, text=True)
+        build_output = f"[Return code: {process.returncode}]\n {process.stderr}"
 
-        while True:
-            with Timer("Analyzing compilation..."):
-                analysis = generate_analysis(task_description, new_code, build_output)
-            if analysis.lower().startswith("good"):
-                logger.log_status("Compilation ✅")
-                return
-            elif analysis.lower().startswith("bad: "):
-                logger.log_status("Compilation ❌")
-                task_description = analysis[5:]
-                break
-            elif analysis.lower().startswith("stop: "):
-                logger.log_status("Compilation ❌")
-                logger.log_status("Build command error: ", analysis[6:])
-                return
-            else:
-                logger.log_status("Analysis unsuccessful, retrying...")
+        with Timer("Analyzing compilation..."):
+            analysis = generate_analysis(task_description, new_code, build_output)
+        if analysis.lower().startswith("good"):
+            logger.log_status("Compilation ✅")
+        elif analysis.lower().startswith("bad: "):
+            logger.log_status("Compilation ❌")
+            task_description = analysis[5:]
+            continue
+        elif analysis.lower().startswith("stop: "):
+            logger.log_status("Compilation ❌")
+            logger.log_status("Build command error: ", analysis[6:])
+        else:
+            logger.log_status("Analysis unsuccessful, retrying...")
+            continue
+
+        result_stdout = ""
+        with Timer("Running basic test..."):
+            try:
+                process = subprocess.Popen(
+                    RUN_CMD,
+                    shell=True,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    text=True,
+                )
+                start_time = time.time()
+                output_lines = []
+                while process.poll() is None:  # While process is running
+                    line = process.stdout.readline()
+                    if line:
+                        output_lines.append(line)
+                        if RUN_EXPECTED_OUTPUT in line:
+                            process.kill()
+                            break
+                    if time.time() - start_time > RUN_TIMEOUT:
+                        raise subprocess.TimeoutExpired(RUN_CMD, RUN_TIMEOUT)
+
+                result_stdout = "".join(output_lines)
+
+            except subprocess.TimeoutExpired:
+                process.kill()
+                result_stdout = "".join(output_lines)  # Preserve collected output
+                result_stdout += f"\nTimeout of {RUN_TIMEOUT} seconds expired."
+
+        run_output = result_stdout
+        print(run_output)
+
+        if RUN_EXPECTED_OUTPUT in run_output:
+            logger.log_status("Basic test ✅")
+            break
+        else:
+            logger.log_status("Basic test ❌")
+            logger.log_status(f"Expected output: {RUN_EXPECTED_OUTPUT}")
+            logger.log_status(f"Output: {run_output}")
+            continue
 
 
 if __name__ == "__main__":
@@ -70,6 +115,6 @@ if __name__ == "__main__":
         print("\nExiting program.")
         logger = Logger()
         shutil.copy(logger.original_path, logger.initial_path)
-        print('Reverted code to original state.')
-        print('Logs saved to:', logger.run_dir)
+        print("Reverted code to original state.")
+        print("Logs saved to:", logger.run_dir)
         exit(0)
