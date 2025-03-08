@@ -1,6 +1,5 @@
 import shutil
 import subprocess
-import time
 
 from utils.openai import generate_code, generate_analysis
 from utils.io import Timer, run_command_with_timeout
