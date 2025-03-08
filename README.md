@@ -1,5 +1,7 @@
 # Senior Thesis (name TBD)
 
+**e1000 unit test will be DONE EOD SATURDAY 3/7**
+
 This is a Rust-betterifier using recursive code-executing LLMs.
 
 This recursive coding agent was created to be modular, but was specifically tuned for the e1000 driver of [TheseusOS](https://github.com/theseus-os/Theseus)
