@@ -1,6 +1,6 @@
 # Senior Thesis (name TBD)
 
-**e1000 unit test will be DONE EOD SATURDAY 3/7**
+**e1000 unit test will be DONE EOD SUNDAY 3/8**
 
 This is a Rust-betterifier using recursive code-executing LLMs.
 
