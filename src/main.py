@@ -11,9 +11,9 @@ def main():
         "Add a few comments here and there and reorder some lines where it won't change the functionality"
     )
     CODE_PATH = "temp.rs"
-    # CODE_PATH = "/Users/addisongoolsbee/Desktop/Theseus/kernel/e1000/src/lib.rs"
+    # CODE_PATH = "~/Desktop/Theseus/kernel/e1000/src/lib.rs"
     BUILD_CMD = f"rustc {CODE_PATH} -o prog"
-    # BUILD_CMD = f"gmake iso -C /Users/addisongoolsbee/Desktop/Theseus/ net=user"
+    # BUILD_CMD = f"gmake iso -C ~/Desktop/Theseus/ net=user"
     RUN_CMD = f"./prog"
     RUN_TIMEOUT = 10
     RUN_EXPECTED_OUTPUT = "This is a simple Rust program."
@@ -24,12 +24,12 @@ def main():
 
     logger = Logger()
 
-    # Main loop:
-    # 1. Generate new code given the prompt
-    # 2. If it compiles, you're done. Otherwise, generate new prompt and go back to 1
     logger.begin_goal(task_description)
     MAX_RETRIES = 5
+
+    # Main loop:
     while True:
+        # Step 1: Generate new code via patch file
         with Timer("Generating..."):
             for attempt in range(1, MAX_RETRIES + 1):
                 try:
@@ -45,6 +45,7 @@ def main():
         with open(CODE_PATH, "w", encoding="utf-8") as f:
             f.write(new_code)
 
+        # Step 2: Compilation
         with Timer("Building..."):
             process = subprocess.run(BUILD_CMD, shell=True, capture_output=True, text=True)
         build_output = f"[Return code: {process.returncode}]\n {process.stderr}"
@@ -64,7 +65,9 @@ def main():
             logger.log_status("Analysis unsuccessful, retrying...")
             continue
 
+        # Step 3: Run the program with a basic unit test
         with Timer("Running basic test..."):
+            # theseus_boot_output = run_command_with_timeout(RUN_CMD, RUN_TIMEOUT)
             run_output = run_command_with_timeout(RUN_CMD, RUN_TIMEOUT, RUN_EXPECTED_OUTPUT)
 
         if RUN_EXPECTED_OUTPUT in run_output:
