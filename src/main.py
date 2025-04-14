@@ -7,14 +7,22 @@ from utils.logger import Logger
 
 
 def main():
+    with Timer("Booting Theseus..."):
+        cmd_1 = "python3 src/examples/bootTheseus.py"
+        theseus_boot_output = run_command_with_timeout(cmd_1, 1)
+        print(theseus_boot_output)
+        # run_output = run_command_with_timeout(RUN_CMD, RUN_TIMEOUT, RUN_EXPECTED_OUTPUT)
+        exit(0)
+
     task_description = (
         "Add a few comments here and there and reorder some lines where it won't change the functionality"
     )
-    CODE_PATH = "temp.rs"
-    # CODE_PATH = "~/Desktop/Theseus/kernel/e1000/src/lib.rs"
-    BUILD_CMD = f"rustc {CODE_PATH} -o prog"
-    # BUILD_CMD = f"gmake iso -C ~/Desktop/Theseus/ net=user"
-    RUN_CMD = f"./prog"
+    # CODE_PATH = "temp.rs"
+    CODE_PATH = "~/Desktop/Theseus/kernel/e1000/src/lib.rs"
+    # BUILD_CMD = f"rustc {CODE_PATH} -o prog"
+    BUILD_CMD = f"gmake iso -C ~/Desktop/Theseus/ net=user"
+    RUN_CMD = f"gmake orun net=user graphic=no SERIAL1=pty SERIAL2=pty"
+    # gmake orun net=user graphic=no SERIAL2=pty
     RUN_TIMEOUT = 10
     RUN_EXPECTED_OUTPUT = "This is a simple Rust program."
 
@@ -67,7 +75,7 @@ def main():
 
         # Step 3: Run the program with a basic unit test
         with Timer("Running basic test..."):
-            # theseus_boot_output = run_command_with_timeout(RUN_CMD, RUN_TIMEOUT)
+            theseus_boot_output = run_command_with_timeout(RUN_CMD, RUN_TIMEOUT)
             run_output = run_command_with_timeout(RUN_CMD, RUN_TIMEOUT, RUN_EXPECTED_OUTPUT)
 
         if RUN_EXPECTED_OUTPUT in run_output:

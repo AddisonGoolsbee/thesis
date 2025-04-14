@@ -1,7 +1,5 @@
 # Senior Thesis (name TBD)
 
-**e1000 unit test portion will not be ready until after break**
-
 This is a Rust-betterifier using recursive code-executing LLMs.
 
 This recursive coding agent was created to be modular, but was specifically tuned for the e1000 driver of [TheseusOS](https://github.com/theseus-os/Theseus)
@@ -58,7 +56,6 @@ When the run ends, the rust file you're modifying will revert to its original st
 - `io.py`: handles printing to the terminal and running programs
 - `logger.py`: handles the tracking of attempts, goals, and runs
 - `openai.py`: handles interaction with OpenAI and includes all prompts. Also manages patch applying
-
 
 ## Relevant Documents
 

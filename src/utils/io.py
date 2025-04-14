@@ -2,6 +2,9 @@ import threading
 import time
 import sys
 import subprocess
+import os
+import signal
+
 
 class Timer:
     def __init__(self, message="Processing..."):
@@ -27,36 +30,25 @@ class Timer:
         print()
 
 
-def run_command_with_timeout(run_cmd, run_timeout, expected_output=None):
-    output_lines = []
+def run_command_with_timeout(run_cmd, run_timeout):
+    process = subprocess.Popen(
+        run_cmd,
+        shell=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        preexec_fn=os.setsid  # NEW: start in new process group
+    )
 
     try:
-        process = subprocess.Popen(
-            run_cmd,
-            shell=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-            bufsize=1,
-        )
-
-        # get output in real time
-        start_time = time.time()
-        while process.poll() is None:
-            line = process.stdout.readline()
-            if line:
-                output_lines.append(line)
-                if expected_output and expected_output in line:
-                    process.kill()
-                    break
-            if time.time() - start_time > run_timeout:
-                raise subprocess.TimeoutExpired(run_cmd, run_timeout)
-
-        result_stdout = "".join(output_lines)
-
+        output, _ = process.communicate(timeout=run_timeout)
     except subprocess.TimeoutExpired:
-        process.kill()
-        result_stdout = "".join(output_lines)
-        result_stdout += f"\nTimeout of {run_timeout} seconds expired."
+        try:
+            os.killpg(process.pid, signal.SIGTERM)
+            time.sleep(0.5)
+        except ProcessLookupError:
+            print("Process group already exited.")
+        output, _ = process.communicate()
+        output += f"\nProcess killed after {run_timeout} seconds timeout"
 
-    return result_stdout
+    return output
