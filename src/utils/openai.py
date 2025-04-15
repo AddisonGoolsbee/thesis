@@ -8,6 +8,7 @@ load_dotenv()
 openai.api_key = os.getenv("OPENAI_API_KEY")
 client = openai.OpenAI()
 
+
 def call_openai_api(prompt):
     completion = client.chat.completions.create(
         model="gpt-4o",
@@ -81,7 +82,7 @@ Only return the list of replacements, do not add comments or labels
     return new_code, result
 
 
-def generate_analysis(task_description, new_code, build_output):
+def generate_build_analysis(task_description, new_code, build_output):
 
     prompt = f"""
 You are a software engineering assistant. You were given some code and a task description on how to modify it.
@@ -99,6 +100,29 @@ Based on this information, do you think the modification worked without introduc
 If the program didn't compile successfully due to something like a bad build command, but it wasn't because of your modification, return "stop: " plus a message to the user on what wen't wrong.
 If you think it didn't work, return "bad: " plus a new task description, which should replace the old task description with a new one that would generate successful code. Do not explain any reasoning.
 If you think yes, return "good" and your explanation. 
+"""
+
+    return call_openai_api(prompt)
+
+
+def generate_basic_test_analysis(task_description, original_code, new_code, run_output):
+
+    prompt = f"""
+You are a software engineering assistant. You were given some code and a task description on how to modify it.
+
+Here was the task description:
+{task_description}
+
+Here was the original code:
+{original_code}
+
+Here was the code you generated:
+{new_code}
+
+The program was compiled successfully, however the output from running the program did not include the expected output.
+{run_output}
+
+Based on this information, make a new, better task description that will modify the original code to generate code that will produce the expected output. Do not explain any reasoning.
 """
 
     return call_openai_api(prompt)

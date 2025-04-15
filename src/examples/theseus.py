@@ -17,12 +17,12 @@ ready_event = threading.Event()
 
 SESSION = "theseus"
 BOOT_CMD = "gmake orun -C ~/Desktop/Theseus/ net=user graphic=no SERIAL1=pty SERIAL2=pty"
-UNIT_TEST_CMD = "ping 8.8.8.8 -t 3"
+UNIT_TEST_CMD = "ping 8.8.8.8 -t 2"
 
 
 def cleanup(signum=None, frame=None):
     global process
-    print("Cleaning up Theseus!", flush=True)
+    print("Cleaning up Theseus", flush=True)
     if process and process.poll() is None:
         try:
             os.killpg(process.pid, signal.SIGKILL)
@@ -34,7 +34,7 @@ def cleanup(signum=None, frame=None):
 def capture_ttys():
     global process, debug_dev, terminal_dev, error_found
 
-    print(f"Running command: {BOOT_CMD}", flush=True)
+    print(f"Running command: {BOOT_CMD}\n", flush=True)
 
     process = subprocess.Popen(
         BOOT_CMD,
@@ -114,7 +114,7 @@ def perform_unit_test(debug, terminal):
 
     child.send("\r")
     child.expect(">", timeout=5)
-    print("✅ Theseus booted successfully! Running unit test...", flush=True)
+    print("Theseus booted successfully", flush=True)
 
     child.send(UNIT_TEST_CMD + "\r")
 
@@ -125,6 +125,7 @@ def perform_unit_test(debug, terminal):
             if ">" in chunk and len(output) > 40:
                 break
             output += chunk
+            print(clean_ansi_and_control(chunk), end="", flush=True)
         except pexpect.exceptions.TIMEOUT:
             if len(output) < 50:
                 output = ""
@@ -150,7 +151,7 @@ if __name__ == "__main__":
     thread = threading.Thread(target=capture_ttys)
     thread.start()
 
-    print("⏳ Waiting for Theseus to boot...", flush=True)
+    print("Waiting for Theseus to boot...", flush=True)
     ready_event.wait()
 
     if not error_found:

@@ -1,30 +1,32 @@
 import shutil
 import subprocess
 
-from utils.openai import generate_code, generate_analysis
+from utils.openai import generate_basic_test_analysis, generate_code, generate_build_analysis
 from utils.io import Timer, run_command_with_timeout
 from utils.logger import Logger
 
+TARGET = "theseus"
+
+if TARGET == "theseus":
+    CODE_PATH = "/Users/addisongoolsbee/Desktop/Theseus/kernel/e1000/src/lib.rs"
+    BUILD_CMD = "gmake iso -C ~/Desktop/Theseus/ net=user"
+    BASIC_TEST_CMD = "python3 src/examples/theseus.py"
+    BASIC_TEST_EXPECTED_OUTPUT = "2 packets transmitted, 2 packets num_received, 0.0% packet loss"
+    BASIC_TEST_TIMEOUT = 15
+else:
+    CODE_PATH = "temp.rs"
+    BUILD_CMD = f"rustc ./temp.rs -o prog"
+    RUN_CMD = "./prog"
+    BASIC_TEST_TIMEOUT = 3
+    RUN_EXPECTED_OUTPUT = "This is a simple Rust program."
+    BASIC_TEST_CMD = "echo 'Running basic test'"
+    BASIC_TEST_EXPECTED_OUTPUT = "Running basic test"
+
 
 def main():
-    with Timer("Booting Theseus..."):
-        cmd_1 = "python3 src/examples/bootTheseus.py"
-        theseus_boot_output = run_command_with_timeout(cmd_1, 2)
-        print(theseus_boot_output)
-        # run_output = run_command_with_timeout(RUN_CMD, RUN_TIMEOUT, RUN_EXPECTED_OUTPUT)
-        exit(0)
-
     task_description = (
         "Add a few comments here and there and reorder some lines where it won't change the functionality"
     )
-    # CODE_PATH = "temp.rs"
-    CODE_PATH = "~/Desktop/Theseus/kernel/e1000/src/lib.rs"
-    # BUILD_CMD = f"rustc {CODE_PATH} -o prog"
-    BUILD_CMD = f"gmake iso -C ~/Desktop/Theseus/ net=user"
-    RUN_CMD = f"gmake orun net=user graphic=no SERIAL1=pty SERIAL2=pty"
-    # gmake orun net=user graphic=no SERIAL2=pty
-    RUN_TIMEOUT = 10
-    RUN_EXPECTED_OUTPUT = "This is a simple Rust program."
 
     with open(CODE_PATH, "r", encoding="utf-8") as f:
         current_code = f.read()
@@ -59,7 +61,8 @@ def main():
         build_output = f"[Return code: {process.returncode}]\n {process.stderr}"
 
         with Timer("Analyzing compilation..."):
-            analysis = generate_analysis(task_description, new_code, build_output)
+            analysis = generate_build_analysis(task_description, new_code, build_output)
+
         if analysis.lower().startswith("good"):
             logger.log_status("Compilation ✅")
         elif analysis.lower().startswith("bad: "):
@@ -75,17 +78,26 @@ def main():
 
         # Step 3: Run the program with a basic unit test
         with Timer("Running basic test..."):
-            theseus_boot_output = run_command_with_timeout(RUN_CMD, RUN_TIMEOUT)
-            run_output = run_command_with_timeout(RUN_CMD, RUN_TIMEOUT, RUN_EXPECTED_OUTPUT)
+            run_output = run_command_with_timeout(BASIC_TEST_CMD, BASIC_TEST_TIMEOUT, BASIC_TEST_EXPECTED_OUTPUT)
+            print(run_output)
 
-        if RUN_EXPECTED_OUTPUT in run_output:
+        if BASIC_TEST_EXPECTED_OUTPUT in run_output:
             logger.log_status("Basic test ✅")
-            break
         else:
             logger.log_status("Basic test ❌")
-            logger.log_status(f"Expected output: {RUN_EXPECTED_OUTPUT}")
+            logger.log_status(f"Expected output: {BASIC_TEST_EXPECTED_OUTPUT}")
             logger.log_status(f"Output: {run_output}")
+            with Timer("Analyzing basic test..."):
+                analysis = generate_basic_test_analysis(
+                    task_description,
+                    current_code,
+                    new_code,
+                    f"The excpected output was:\n{BASIC_TEST_EXPECTED_OUTPUT}\nThe output from running the program was:\n{run_output}",
+                )
             continue
+
+        print("Reached the end of the loop")
+        break
 
 
 if __name__ == "__main__":
