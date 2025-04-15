@@ -8,6 +8,9 @@ httpx==0.28.1
 idna==3.10
 jiter==0.8.2
 openai==1.64.0
+packaging==24.2
+pexpect==4.9.0
+ptyprocess==0.7.0
 pydantic==2.10.6
 pydantic_core==2.27.2
 python-dotenv==1.0.1
