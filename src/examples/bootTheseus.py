@@ -1,32 +1,43 @@
 #!/usr/bin/env python3
+import select
 import subprocess
 import re
+import threading
 import time
 import sys
 import os
 import signal
+import pexpect
 
-process = None  # global so finally block can access it
+process = None
+debug_dev = None
+terminal_dev = None
+error_found = False
+ready_event = threading.Event()
 
-def handle_sigterm(signum, frame):
-    raise KeyboardInterrupt
+SESSION = "theseus"
+BOOT_CMD = "gmake orun -C ~/Desktop/Theseus/ net=user graphic=no SERIAL1=pty SERIAL2=pty"
+UNIT_TEST_CMD = "ping 8.8.8.8 -t 3"
 
-signal.signal(signal.SIGTERM, handle_sigterm)
+
+def cleanup(signum=None, frame=None):
+    global process
+    print("Cleaning up Theseus!", flush=True)
+    if process and process.poll() is None:
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+        except Exception:
+            pass
+    sys.exit(0)
+
 
 def capture_ttys():
-    global process
+    global process, debug_dev, terminal_dev, error_found
 
-    run_cmd = "gmake orun -C ~/Desktop/Theseus/ net=user graphic=no SERIAL1=pty SERIAL2=pty"
-    debug_dev = None
-    terminal_dev = None
-    saw_make_error = False
-    collected_lines = []
-
-    print(f"Running command: {run_cmd}", flush=True)
-    print("Waiting for ttys information...", flush=True)
+    print(f"Running command: {BOOT_CMD}", flush=True)
 
     process = subprocess.Popen(
-        run_cmd,
+        BOOT_CMD,
         shell=True,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
@@ -40,9 +51,8 @@ def capture_ttys():
     while process.poll() is None:
         line = process.stdout.readline()
         if not line:
-            continue
-        print(line, end="", flush=True)
-        collected_lines.append(line)
+            break
+        # print(line, end="", flush=True)
 
         match = re.search(pattern, line)
         if match:
@@ -55,43 +65,97 @@ def capture_ttys():
             if debug_dev and terminal_dev:
                 break
 
-    # Wait one more second for late errors
-    end_time = time.time() + 1
+    end_time = time.time() + 0.3
     while time.time() < end_time and process.poll() is None:
-        line = process.stdout.readline()
-        if not line:
-            continue
-        print(line, end="", flush=True)
-        collected_lines.append(line)
-        if "gmake: *** [Makefile:997: orun] Error 1" in line:
-            saw_make_error = True
+        rlist, _, _ = select.select([process.stdout], [], [], 0.1)
+        if rlist:
+            line = process.stdout.readline()
+            if not line:
+                continue
+            # print(line, end="", flush=True)
+            if "gmake: *** [Makefile:997: orun] Error 1" in line:
+                error_found = True
+                break
 
-    if saw_make_error:
+    if error_found:
         print("❌ gmake failed inside bootTheseus!", flush=True)
-        sys.exit(1)
+        cleanup()
 
-    print(f"\nDEBUG_DEV: {debug_dev}", flush=True)
-    print(f"TERMINAL_DEV: {terminal_dev}", flush=True)
-    print("\nScript completed. The gmake orun process is still running.", flush=True)
-    print("Press Ctrl+C to exit.", flush=True)
+    ready_event.set()
 
-    # Keep alive until forcibly killed
+
+def wait_for_prompt(ser, prompt=b">", timeout=10):
+    start = time.time()
+    buffer = b""
+    while time.time() - start < timeout:
+        ser.write(b"\r")
+        time.sleep(0.2)
+        buffer += ser.read(1024)
+        if prompt in buffer:
+            # print(prompt.decode(), flush=True)
+            return True
+    return False
+
+
+def clean_ansi_and_control(output: str) -> str:
+    # Remove ANSI escape sequences
+    output = re.sub(r"\x1b\[[0-9;]*[A-Za-z]", "", output)
+    # Remove bell, carriage return, and vertical tab
+    output = re.sub(r"[\x07\r\v]", "", output)
+    # Handle backspace sequences like "a\b" → remove the character before
+    while "\b" in output:
+        output = re.sub(r".\x08", "", output)
+    return output
+
+
+def perform_unit_test(debug, terminal):
+    child = pexpect.spawn(f"screen -S {SESSION} {terminal}", encoding="utf-8")
+    time.sleep(0.1)
+
+    child.send("\r")
+    child.expect(">", timeout=5)
+    print("✅ Theseus booted successfully! Running unit test...", flush=True)
+
+    child.send(UNIT_TEST_CMD + "\r")
+
+    output = ""
     while True:
-        time.sleep(1)
-
-
-def cleanup():
-    global process
-    if process and process.poll() is None:
         try:
-            print(f"Killing gmake process group {process.pid}", flush=True)
-            os.killpg(process.pid, signal.SIGTERM)
-        except Exception:
-            pass
+            chunk = child.read_nonblocking(size=1024, timeout=2)
+            if ">" in chunk and len(output) > 40:
+                break
+            output += chunk
+        except pexpect.exceptions.TIMEOUT:
+            if len(output) < 50:
+                output = ""
+                child.send(UNIT_TEST_CMD + "\r")
+                continue
+            break
+
+    clean_output = clean_ansi_and_control(output)
+
+    with open("temp.txt", "w") as f:
+        f.write(clean_output)
+
+    child.send("\x01" + "d")  # Ctrl-A D to detach
+    child.close()
+
+    subprocess.run(["screen", "-S", SESSION, "-X", "quit"])
 
 
 if __name__ == "__main__":
-    try:
-        capture_ttys()
-    finally:
-        cleanup()
+    signal.signal(signal.SIGTERM, cleanup)
+    signal.signal(signal.SIGINT, cleanup)
+
+    thread = threading.Thread(target=capture_ttys)
+    thread.start()
+
+    print("⏳ Waiting for Theseus to boot...", flush=True)
+    ready_event.wait()
+
+    if not error_found:
+        perform_unit_test(debug_dev, terminal_dev)
+
+    cleanup()
+
+    thread.join()

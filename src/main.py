@@ -9,7 +9,7 @@ from utils.logger import Logger
 def main():
     with Timer("Booting Theseus..."):
         cmd_1 = "python3 src/examples/bootTheseus.py"
-        theseus_boot_output = run_command_with_timeout(cmd_1, 1)
+        theseus_boot_output = run_command_with_timeout(cmd_1, 2)
         print(theseus_boot_output)
         # run_output = run_command_with_timeout(RUN_CMD, RUN_TIMEOUT, RUN_EXPECTED_OUTPUT)
         exit(0)

@@ -37,7 +37,7 @@ def run_command_with_timeout(run_cmd, run_timeout):
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         text=True,
-        preexec_fn=os.setsid  # NEW: start in new process group
+        preexec_fn=os.setsid
     )
 
     try:
@@ -45,7 +45,7 @@ def run_command_with_timeout(run_cmd, run_timeout):
     except subprocess.TimeoutExpired:
         try:
             os.killpg(process.pid, signal.SIGTERM)
-            time.sleep(0.5)
+            time.sleep(0.01)
         except ProcessLookupError:
             print("Process group already exited.")
         output, _ = process.communicate()
