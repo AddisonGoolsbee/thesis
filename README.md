@@ -18,21 +18,15 @@ _Note that this has only been tested on Mac (Apple Silicon)_
 - Find a rust file (it can be standalone or it can be part of a larger project). Go to `main.py` and replace the following constants:
   - `CODE_PATH`: path to the rust file
   - `BUILD_CMD`: command to compile (but not run) the file/project
-  - `RUN_CMD`: command to run the compiled program
-  - `RUN_EXPECTED_OUTPUT`: a line or several that you expect to be printed to stdout upon running the compiled program (the 'basic unit test')
-  - `RUN_TIMEOUT`: the time in seconds to wait before killing the compiled program if the expected output is not printed
+  - `BASIC_TEST_CMD`: command to run the compiled program
+  - `BASIC_TEST_EXPECTED_OUTPUT`: a line or several that you expect to be printed to stdout upon running the compiled program (the 'basic unit test')
+  - `BASIC_TEST_TIMEOUT`: the time in seconds to wait before killing the compiled program if the expected output is not printed
 
 ### Running with the Theseus e1000
 
-- If you want to run this on the e1000, you'll need to add the following line to ~line 162 in `e1000/src/lib.rs`: `rust e1000_pci_dev.pci_enable_intx(true);`. This is to make ping work, which will be our basic unit test
+- If you want to run this on the e1000, you'll need to add the following line to the Theseus code base: go to `kernel/e1000/src/lib.rs`, and right after the `let interrupt_num` block, around line 162, add the line `rust e1000_pci_dev.pci_enable_intx(true);`. This is to make ping work, which will be our basic unit test
 
-Use these constants:
-
-- `CODE_PATH = "{path-to}/Theseus/kernel/e1000/src/lib.rs"`
-- `BUILD_CMD = "gmake iso -C {path-to}/Theseus/ net=user"`
-- `RUN_CMD = {in progress}`
-- `RUN_EXPECTED_OUTPUT = {in progress}`
-- `RUN_TIMEOUT = 20`
+set `TARGET = "theseus"` at the top of `main.py` for all of the environment variables to be set
 
 ## Usage
 
