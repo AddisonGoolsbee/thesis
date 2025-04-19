@@ -1,4 +1,4 @@
-TARGET = "rfk"
+TARGET = "quicksort"
 
 if TARGET == "theseus":
     CODE_PATH = "/Users/addisongoolsbee/Desktop/Theseus/kernel/e1000/src/lib.rs"
@@ -11,6 +11,12 @@ elif TARGET == "rfk":
     BUILD_CMD = "cargo +nightly test --manifest-path src/examples/rfk/Cargo.toml --test test --no-run"
     BASIC_TEST_CMD = "cargo +nightly test --manifest-path src/examples/rfk/Cargo.toml --test test"
     BASIC_TEST_EXPECTED_OUTPUT = "test result: ok. 3 passed;"
+    BASIC_TEST_TIMEOUT = 15
+elif TARGET == "quicksort":
+    CODE_PATH = "src/examples/quicksort/src/main.rs"
+    BUILD_CMD = "cargo build --manifest-path src/examples/quicksort/Cargo.toml"
+    BASIC_TEST_CMD = "./src/examples/quicksort/target/debug/quicksort"
+    BASIC_TEST_EXPECTED_OUTPUT = "[1, 2, 3, 4, 7, 9]"
     BASIC_TEST_TIMEOUT = 15
 else:
     CODE_PATH = "temp.rs"
