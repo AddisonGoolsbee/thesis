@@ -6,3 +6,4 @@ temp*
 prog
 original*.rs
 log/
+target/
