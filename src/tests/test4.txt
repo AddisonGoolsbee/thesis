@@ -1,0 +1,44 @@
+unsafe
+
+unsafe {
+
+}
+/*
+unsafe {
+    {
+        {
+            unsafe {
+
+            }
+        }
+    }
+}
+*/
+
+unsafe {
+// 
+heyooo
+// 
+//}
+
+// unsafe
+
+fn main() {
+    unsafe {
+        let x = 5;
+        if x > 0 {
+            unsafe {
+                let y = 10;
+                if y > 0 {
+                    unsafe {
+                        let z = 15;
+                    }
+                }
+            }
+        }
+    }
+    ababab
+}
+abababa
+}
+abababababab

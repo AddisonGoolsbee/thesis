@@ -1,0 +1,14 @@
+fn main() {
+    unsafe {
+        let x = 5;
+    }
+    
+    unsafe
+    {
+        let y = 10;
+    }
+    
+    unsafe fn dangerous() {
+        let z = 15;
+    }
+} 
