@@ -1,6 +1,10 @@
 import os
 import re
 import json
+import shutil
+
+from config import CODE_PATH
+
 
 class Logger:
     _instance = None
@@ -14,17 +18,31 @@ class Logger:
         if hasattr(self, "initialized"):
             return
         self.initialized = True
-        self.logger_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "log"))
-        if not os.path.exists(self.logger_path):
-            os.makedirs(self.logger_path)
 
-        self.initial_path = "/Users/addisongoolsbee/Desktop/Theseus/kernel/e1000/src/lib.rs"
+        self.initial_path = CODE_PATH
         with open(self.initial_path, "r", encoding="utf-8") as f:
             self.initial_code = f.read()
 
-        self.original_path = os.path.join(self.logger_path, "original.rs")
-        if not os.path.exists(self.original_path):
-            with open(self.original_path, "w", encoding="utf-8") as f:
+        self.logger_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "log"))
+        self.logger_original_path = os.path.join(self.logger_path, "original.rs")
+
+        create_log = False
+        if os.path.exists(self.logger_path):
+            if (
+                not os.path.exists(self.logger_original_path)
+                or open(self.logger_original_path, "r", encoding="utf-8").read() != self.initial_code
+            ):
+                print("log/original.rs has changed, removing old log folder")
+                shutil.rmtree(self.logger_path)
+                create_log = True
+        else:
+            print("No log folder found")
+            create_log = True
+
+        if create_log:
+            print("Creating new log folder")
+            os.makedirs(self.logger_path)
+            with open(self.logger_original_path, "w", encoding="utf-8") as f:
                 f.write(self.initial_code)
 
         run_dirs = [d for d in os.listdir(self.logger_path) if re.fullmatch(r"run\d{3}", d)]
@@ -57,5 +75,5 @@ class Logger:
 
     def log_status(self, status):
         with open(os.path.join(self.goal_path, "prompts.txt"), "a", encoding="utf-8") as f:
-            f.write(status + '\n')
+            f.write(status + "\n")
         print(status)

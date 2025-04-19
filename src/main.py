@@ -4,29 +4,11 @@ import subprocess
 from utils.openai import generate_basic_test_analysis, generate_code, generate_build_analysis
 from utils.io import Timer, run_command_with_timeout
 from utils.logger import Logger
-
-TARGET = "theseus"
-
-if TARGET == "theseus":
-    CODE_PATH = "/Users/addisongoolsbee/Desktop/Theseus/kernel/e1000/src/lib.rs"
-    BUILD_CMD = "gmake iso -C ~/Desktop/Theseus/ net=user"
-    BASIC_TEST_CMD = "python3 src/examples/theseus.py"
-    BASIC_TEST_EXPECTED_OUTPUT = "2 packets transmitted, 2 packets num_received, 0.0% packet loss"
-    BASIC_TEST_TIMEOUT = 15
-else:
-    CODE_PATH = "temp.rs"
-    BUILD_CMD = f"rustc ./temp.rs -o prog"
-    RUN_CMD = "./prog"
-    BASIC_TEST_TIMEOUT = 3
-    RUN_EXPECTED_OUTPUT = "This is a simple Rust program."
-    BASIC_TEST_CMD = "echo 'Running basic test'"
-    BASIC_TEST_EXPECTED_OUTPUT = "Running basic test"
+from config import *
 
 
 def main():
-    task_description = (
-        "Add a few comments here and there and reorder some lines where it won't change the functionality"
-    )
+    task_description = "Add a few comments here and there"
 
     with open(CODE_PATH, "r", encoding="utf-8") as f:
         current_code = f.read()
@@ -70,8 +52,8 @@ def main():
             task_description = analysis[5:]
             continue
         elif analysis.lower().startswith("stop: "):
-            logger.log_status("Compilation ❌")
-            logger.log_status("Build command error: ", analysis[6:])
+            logger.log_status("Compilation ❌ (build command error)")
+            logger.log_status(f"Build command error: {analysis[6:]}")
         else:
             logger.log_status("Analysis unsuccessful, retrying...")
             continue
@@ -101,13 +83,16 @@ def main():
 
 
 if __name__ == "__main__":
+    logger = Logger()
     try:
         main()
-        raise KeyboardInterrupt
     except KeyboardInterrupt:
-        print("\nExiting program.")
-        logger = Logger()
-        shutil.copy(logger.original_path, logger.initial_path)
+        print("\nExiting program via keyboard interrupt.")
+    except Exception as e:
+        print("\nProgram crashed with exception:")
+        print(e)
+    finally:
+        shutil.copy(logger.logger_original_path, logger.initial_path)
         print("Reverted code to original state.")
-        print("Logs saved to:", logger.run_dir)
+        print("Logs saved to ", logger.run_dir)
         exit(0)

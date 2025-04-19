@@ -54,11 +54,14 @@ def run_command_with_timeout(run_cmd, run_timeout, expected_output=None):
                     break
                 output += line
                 if expected_output and expected_output in output:
-                    os.killpg(process.pid, signal.SIGTERM)
+                    try:
+                        os.killpg(os.getpgid(process.pid), signal.SIGTERM)
+                    except ProcessLookupError:
+                        pass
                     return output
     except subprocess.TimeoutExpired:
         try:
-            os.killpg(process.pid, signal.SIGTERM)
+            os.killpg(os.getpgid(process.pid), signal.SIGTERM)
             time.sleep(0.01)
         except ProcessLookupError:
             pass
