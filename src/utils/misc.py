@@ -1,4 +1,4 @@
-def get_unsafe_lines(rust_code: str) -> tuple[int, int]:
+def count_unsafe(rust_code: str, debug: bool = False) -> tuple[int, int]:
     def remove_comments(code: str) -> str:
         """Remove all comments from the code."""
         lines = code.split("\n")
@@ -28,8 +28,8 @@ def get_unsafe_lines(rust_code: str) -> tuple[int, int]:
     rust_code = remove_comments(rust_code)
 
     lines = rust_code.split("\n")
-    unsafe_count = 0
-    unsafe_lines = 0
+    num_unsafe_blocks = 0
+    num_unsafe_lines = 0
     in_unsafe_block = False
     found_unsafe = False
     bracket_depth = 0
@@ -61,39 +61,44 @@ def get_unsafe_lines(rust_code: str) -> tuple[int, int]:
             found_unsafe = True
             # Count the unsafe line itself
             if count_code_in_line(line):
-                print(f"Unsafe line {i+1}: {line}")
-                unsafe_lines += 1
+                if debug:
+                    print(f"Unsafe line {i+1}: {line}")
+                num_unsafe_lines += 1
             # Check if opening brace is on same line
             if "{" in line:
                 in_unsafe_block = True
-                unsafe_count += 1
+                num_unsafe_blocks += 1
                 found_unsafe = False
                 # Check for additional code on same line as opening brace
                 if count_code_in_line(line.replace("unsafe", "").strip()):
-                    print(f"Unsafe line {i+1}: {line}")
-                    unsafe_lines += 1
+                    if debug:
+                        print(f"Unsafe line {i+1}: {line}")
+                    num_unsafe_lines += 1
         # Check if opening brace is on next line after unsafe - only if we're not already in an unsafe block
         elif found_unsafe and "{" in line and not in_unsafe_block:
             in_unsafe_block = True
-            unsafe_count += 1
+            num_unsafe_blocks += 1
             found_unsafe = False
             # Check for code on same line as opening brace
             if count_code_in_line(line):
-                print(f"Unsafe line {i+1}: {line}")
-                unsafe_lines += 1
+                if debug:
+                    print(f"Unsafe line {i+1}: {line}")
+                num_unsafe_lines += 1
         # Check for end of unsafe block - only if we're at the outermost level
         elif in_unsafe_block and "}" in line and bracket_depth == 0:
             # Check for code on same line as closing brace
             if count_code_in_line(line):
-                print(f"Unsafe line {i+1}: {line}")
-                unsafe_lines += 1
+                if debug:
+                    print(f"Unsafe line {i+1}: {line}")
+                num_unsafe_lines += 1
             in_unsafe_block = False
         # Count code lines inside unsafe block
         elif in_unsafe_block and is_code_line(line):
-            print(f"Unsafe line {i+1}: {line}")
-            unsafe_lines += 1
+            if debug:
+                print(f"Unsafe line {i+1}: {line}")
+            num_unsafe_lines += 1
 
-    return unsafe_count, unsafe_lines
+    return num_unsafe_blocks, num_unsafe_lines
 
 if __name__ == "__main__":
     test_files = ["src/tests/test1.txt", "src/tests/test2.txt", "src/tests/test3.txt", "src/tests/test4.txt"]
@@ -103,7 +108,7 @@ if __name__ == "__main__":
         try:
             with open(test_file, "r") as f:
                 code = f.read()
-                block_count, line_count = get_unsafe_lines(code)
+                block_count, line_count = count_unsafe(code, debug=True)
                 print(f"Found {block_count} unsafe blocks")
                 print(f"Total lines of code inside unsafe blocks: {line_count}")
         except FileNotFoundError:

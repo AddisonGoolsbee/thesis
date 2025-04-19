@@ -4,7 +4,7 @@ import subprocess
 from utils.openai import generate_basic_test_analysis, generate_code, generate_build_analysis
 from utils.io import Timer, run_command_with_timeout
 from utils.logger import Logger
-from utils.misc import get_unsafe_lines
+from utils.misc import count_unsafe
 from config import *
 
 
@@ -80,19 +80,13 @@ def main():
             continue
 
         # Step 4: Compare lines of unsafe code
-        with Timer("Comparing lines of unsafe code..."):
-            compare_unsafe_lines(current_code, new_code)
+        num_old_unsafe_blocks, num_old_unsafe_lines = count_unsafe(current_code)
+        num_new_unsafe_blocks, num_new_unsafe_lines = count_unsafe(new_code)
+        print(f"Old unsafe blocks: {num_old_unsafe_blocks}, Old unsafe lines: {num_old_unsafe_lines}")
+        print(f"New unsafe blocks: {num_new_unsafe_blocks}, New unsafe lines: {num_new_unsafe_lines}")
 
         print("Reached the end of the loop")
         break
-
-
-def compare_unsafe_lines(current_code, new_code):
-    current_lines = current_code.split("\n")
-    new_lines = new_code.split("\n")
-    for i, line in enumerate(current_lines):
-        if line.startswith("unsafe"):
-            print(f"Unsafe line {i+1}: {line}")
 
 
 if __name__ == "__main__":
