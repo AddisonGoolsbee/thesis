@@ -3,7 +3,7 @@ TARGET = "quicksort"
 if TARGET == "theseus":
     CODE_PATH = "/Users/addisongoolsbee/Desktop/Theseus/kernel/e1000/src/lib.rs"
     BUILD_CMD = "gmake iso -C ~/Desktop/Theseus/ net=user"
-    BASIC_TEST_CMD = "python3 src/examples/theseus.py"
+    BASIC_TEST_CMD = "python3 src/examples/theseus_e1000/theseus.py"
     BASIC_TEST_EXPECTED_OUTPUT = "2 packets transmitted, 2 packets num_received, 0.0% packet loss"
     BASIC_TEST_TIMEOUT = 15
 elif TARGET == "rfk":
