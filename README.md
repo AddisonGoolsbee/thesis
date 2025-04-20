@@ -1,6 +1,4 @@
-# Senior Thesis (name TBD)
-
-This is a Rust-betterifier using recursive code-executing LLMs.
+# Oxidizer: a self-improving Rust code refiner driven by LLM recursion
 
 This recursive coding agent was created to be modular, but was specifically tuned for the e1000 driver of [TheseusOS](https://github.com/theseus-os/Theseus)
 
