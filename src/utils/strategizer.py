@@ -76,3 +76,12 @@ Do not explain your reasoning. Just return the strategy.
             case _:
                 log_message = "unknown error"
         self.logger.log_strategy_result(f"Result: {log_message} in {attempts} attempt{'s' if attempts != 1 else ''} and {time_taken:.2f}s", initial_unsafe_lines)
+
+    def should_quit(self):
+        consecutive_failures = 0
+        for strategy in reversed(self.strategies):
+            if strategy.result != StrategyStatus.SUCCESS:
+                consecutive_failures += 1
+            else:
+                break
+        return consecutive_failures >= 10

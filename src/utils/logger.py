@@ -54,7 +54,7 @@ class Logger:
         print("Reverted code to original state.")
         print("Logs saved to ", self.run_dir)
         if os.path.exists(os.path.join(self.run_dir, "best.rs")):
-            print("Best code saved to ", os.path.join(self.run_dir, "best.rs"))
+            print("Best generated code saved to ", os.path.join(self.run_dir, "best.rs"))
 
     def begin_run(self, initial_unsafe_lines):
         self.initial_unsafe_lines = initial_unsafe_lines

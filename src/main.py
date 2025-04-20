@@ -47,6 +47,10 @@ class Oxidizer:
                 self.logger.log_status("No unsafe lines remaining. Exiting.")
                 break
 
+            if self.strategizer.should_quit():
+                self.logger.log_status("Encountered 10 consecutive failed strategies. Exiting due to lack of progress.")
+                break
+
     def run_strategy(self, strategy_prompt, current_code):
         task_description = strategy_prompt
         num_attempts = 0
