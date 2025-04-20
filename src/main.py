@@ -7,6 +7,7 @@ from utils.openai import (
     generate_code,
     generate_build_analysis,
     generate_code_safety_analysis,
+    generate_code_generation_failure_analysis,
 )
 from utils.io import Timer, run_command_with_timeout
 from utils.logger import Logger
@@ -18,6 +19,7 @@ from config import *
 class Oxidizer:
     MAX_GENERATION_RETRIES = 5
     MAX_PROMPTS = 10
+
     def __init__(self):
         self.logger = Logger()
         self.strategizer = Strategizer(self.logger)
@@ -72,7 +74,12 @@ class Oxidizer:
                         print(f"\nError: {e} (Attempt {attempt}/{self.MAX_GENERATION_RETRIES})")
                         if attempt == self.MAX_GENERATION_RETRIES:
                             self.logger.log_status("Max code generation retries reached. Aborting.")
-                            return StrategyStatus.FAILED_GENERATION, current_code
+                            analysis = generate_code_generation_failure_analysis(
+                                task_description,
+                                current_code,
+                                self.MAX_GENERATION_RETRIES,
+                            )
+                            task_description = analysis
 
             with open(CODE_PATH, "w", encoding="utf-8") as f:
                 f.write(new_code)

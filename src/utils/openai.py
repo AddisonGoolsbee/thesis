@@ -72,6 +72,22 @@ Only return the list of replacements, do not add comments or labels
     new_code = apply_changes(current_code, result)
     return new_code, result
 
+def generate_code_generation_failure_analysis(task_description, current_code, num_attempts):
+    prompt = f"""
+You are a software engineering assistant. You were given some code and a task description on how to modify it.
+
+Here was the task description:
+{task_description}
+
+Here was the code you generated:
+{current_code}
+
+Using this information, you tried {num_attempts} times to generate code in a patch format that would modify the original code to generate code that would produce the expected output. All attempts failed.
+Based on this information, modify the task description to make it easier to generate code that will produce the expected output, maintaining the original strategy. Do not explain any reasoning, just return the new task description.
+"""
+
+    return call_openai_api(prompt)
+
 
 def generate_build_analysis(task_description, new_code, build_output):
 
