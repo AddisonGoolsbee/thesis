@@ -108,7 +108,7 @@ if __name__ == "__main__":
         "src/tests/test3.txt",
         "src/tests/test4.txt",
         "src/examples/quicksort/src/main.rs",
-        "src/log/run001/goal001/code001.rs",
+        "src/log/run004/strategy001/code001.rs",
     ]
 
     for test_file in test_files:

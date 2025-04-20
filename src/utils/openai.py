@@ -126,3 +126,29 @@ Based on this information, make a new, better task description that will modify 
 """
 
     return call_openai_api(prompt)
+
+
+def generate_code_safety_analysis(task_description, original_code, new_code, num_old_unsafe_lines, num_new_unsafe_lines):
+
+    prompt = f"""
+You are a software engineering assistant. You were given some code and a task description on how to modify it to make it safer.
+
+Here was the task description:
+{task_description}
+
+Here was the original code:
+{original_code}
+
+Here was the code you generated:
+{new_code}
+
+The program compiled and ran successfully, preserving the original functionality.
+
+However, {"the new code has the same number of unsafe lines as the original code" if num_old_unsafe_lines == num_new_unsafe_lines else "the new code has more unsafe lines than the original code"}, so your modification failed. ({num_new_unsafe_lines} new vs {num_old_unsafe_lines} old unsafe lines)
+
+If you must preserve the same rough strategy of <{task_description}>, do you think that it is possible to update the task description to actually make the code safer (less lines of unsafe code)? The original task description's core strategy must be preserved, only the fine details should be changed.
+If you don't think it is possible to make the code safer using a similar strategy, return "bad: " plus your reasoning. Reasoning should be concise.
+If you think it is possible, return "good: " plus a new task description that will modify the original code to generate code that will produce the expected output. Do not explain any reasoning.
+"""
+
+    return call_openai_api(prompt)

@@ -26,11 +26,9 @@ pub unsafe extern "C" fn partition(
     while j <= high - 1 as libc::c_int {
         if *arr.offset(j as isize) <= pivot {
             i += 1;
-            i;
             swap(&mut *arr.offset(i as isize), &mut *arr.offset(j as isize));
         }
         j += 1;
-        j;
     }
     swap(
         &mut *arr.offset((i + 1 as libc::c_int) as isize),

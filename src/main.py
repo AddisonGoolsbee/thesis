@@ -1,7 +1,12 @@
 import shutil
 import subprocess
 
-from utils.openai import generate_basic_test_analysis, generate_code, generate_build_analysis
+from utils.openai import (
+    generate_basic_test_analysis,
+    generate_code,
+    generate_build_analysis,
+    generate_code_safety_analysis,
+)
 from utils.io import Timer, run_command_with_timeout
 from utils.logger import Logger
 from utils.misc import count_unsafe
@@ -9,7 +14,7 @@ from config import *
 
 
 def main():
-    task_description = "Make the swap function safe"
+    task_description = "Add some comments to the code"
 
     with open(CODE_PATH, "r", encoding="utf-8") as f:
         current_code = f.read()
@@ -17,7 +22,7 @@ def main():
 
     logger = Logger()
 
-    logger.begin_goal(task_description)
+    logger.begin_strategy(task_description)
     MAX_RETRIES = 5
 
     # Main loop:
@@ -82,7 +87,27 @@ def main():
         # Step 4: Compare lines of unsafe code
         num_old_unsafe_lines, _ = count_unsafe(current_code)
         num_new_unsafe_lines, _ = count_unsafe(new_code)
-        print(f'Result: {num_old_unsafe_lines} unsafe lines -> {num_new_unsafe_lines} unsafe lines')
+        logger.log_status(f"Result: {num_old_unsafe_lines} unsafe lines -> {num_new_unsafe_lines} unsafe lines")
+        if num_old_unsafe_lines <= num_new_unsafe_lines:
+            logger.log_status("Code safety improved ❌")
+            with Timer("Analyzing why new code is not safer..."):
+                analysis = generate_code_safety_analysis(
+                    task_description,
+                    current_code,
+                    new_code,
+                    num_old_unsafe_lines,
+                    num_new_unsafe_lines,
+                )
+            if analysis.lower().startswith("good: "):
+                logger.log_status("Strategy can still be used. Trying with new prompt.")
+                task_description = analysis[6:]
+                continue
+            elif analysis.lower().startswith("bad: "):
+                logger.log_status(
+                    f"Strategy cannot be used to make code safer for the following reason: {analysis[6:]}"
+                )
+        else:
+            logger.log_status("Code safety improved ✅")
 
         print("Reached the end of the loop")
         break
