@@ -36,8 +36,8 @@ class Oxidizer:
             with Timer("Generating new strategy..."):
                 strategy_prompt = self.strategizer.generate_strategy(self.best_code)
 
-            result, new_code, attempts, time_taken = self.run_strategy(strategy_prompt, self.best_code)
-            self.strategizer.add_strategy(strategy_prompt, result, attempts, time_taken, self.current_unsafe_lines)
+            result, new_code, attempts, time_taken, ending_prompt = self.run_strategy(strategy_prompt, self.best_code)
+            self.strategizer.add_strategy(ending_prompt, result, attempts, time_taken, self.current_unsafe_lines)
 
             if result == StrategyStatus.SUCCESS:
                 self.best_code = new_code
@@ -61,7 +61,13 @@ class Oxidizer:
             self.logger.log_prompt(task_description)
             num_attempts += 1
             if num_attempts > self.MAX_PROMPTS:
-                return StrategyStatus.FAILED_TOO_LONG, current_code, self.MAX_PROMPTS, time.time() - strategy_start_time
+                return (
+                    StrategyStatus.FAILED_TOO_LONG,
+                    current_code,
+                    self.MAX_PROMPTS,
+                    time.time() - strategy_start_time,
+                    task_description,
+                )
 
             # Step 1: Generate new code via patch file
             step_start_time = time.time()
@@ -69,12 +75,16 @@ class Oxidizer:
                 for generation_attempt in range(1, self.MAX_GENERATION_RETRIES + 1):
                     try:
                         new_code, replacements = generate_code(task_description, current_code)
-                        self.logger.log_generated_code(replacements, new_code, generation_attempt, time.time() - step_start_time)
+                        self.logger.log_generated_code(
+                            replacements, new_code, generation_attempt, time.time() - step_start_time
+                        )
                         break
                     except Exception as e:
                         print(f"\nError: {e} (Attempt {generation_attempt}/{self.MAX_GENERATION_RETRIES})")
                         if generation_attempt == self.MAX_GENERATION_RETRIES:
-                            self.logger.log_status("Max code generation retries reached. Aborting.", time.time() - step_start_time)
+                            self.logger.log_status(
+                                "Max code generation retries reached. Aborting.", time.time() - step_start_time
+                            )
                             analysis = generate_code_generation_failure_analysis(
                                 task_description,
                                 current_code,
@@ -90,12 +100,13 @@ class Oxidizer:
             with Timer("Building..."):
                 process = subprocess.run(BUILD_CMD, shell=True, capture_output=True, text=True)
             build_output = f"[Return code: {process.returncode}]\n {process.stderr}"
+            self.logger.log_verbose(f"Build output:\n{build_output}")
 
             if process.returncode == 0 and process.stderr == "":
                 self.logger.log_status("Compilation ✅", time.time() - step_start_time)
             else:
                 with Timer("Analyzing compilation..."):
-                    analysis = generate_build_analysis(task_description, new_code, build_output)
+                    analysis = generate_build_analysis(task_description, new_code, build_output, strategy_prompt)
 
                 if analysis.lower().startswith("good"):
                     self.logger.log_status("Compilation ✅", time.time() - step_start_time)
@@ -131,6 +142,7 @@ class Oxidizer:
                         current_code,
                         new_code,
                         f"The excpected output was:\n{TEST_EXPECTED_OUTPUT}\nThe output from running the program was:\n{run_output}",
+                        strategy_prompt,
                     )
                     task_description = analysis
                 self.logger.log_status("Generated new prompt", time.time() - step_start_time)
@@ -153,6 +165,7 @@ class Oxidizer:
                         new_code,
                         num_old_unsafe_lines,
                         num_new_unsafe_lines,
+                        strategy_prompt,
                     )
                 self.logger.log_status("Analysis complete", time.time() - step_start_time)
                 if analysis.lower().startswith("good: "):
@@ -162,16 +175,34 @@ class Oxidizer:
                     continue
                 else:
                     self.logger.log_status(
-                        f"\nStrategy cannot be used to make code safer for the following reason: {analysis[5:]}", 
+                        f"\nStrategy cannot be used to make code safer for the following reason: {analysis[5:]}",
                     )
                     if num_old_unsafe_lines > num_new_unsafe_lines:
-                        return StrategyStatus.CODE_SAFETY_DETERIORATED, new_code, num_attempts, time.time() - strategy_start_time
+                        return (
+                            StrategyStatus.CODE_SAFETY_DETERIORATED,
+                            new_code,
+                            num_attempts,
+                            time.time() - strategy_start_time,
+                            task_description,
+                        )
                     else:
-                        return StrategyStatus.CODE_SAFETY_UNCHANGED, new_code, num_attempts, time.time() - strategy_start_time
+                        return (
+                            StrategyStatus.CODE_SAFETY_UNCHANGED,
+                            new_code,
+                            num_attempts,
+                            time.time() - strategy_start_time,
+                            task_description,
+                        )
             else:
                 self.logger.log_status("Code safety improved ✅")
                 self.current_unsafe_lines = num_new_unsafe_lines
-                return StrategyStatus.SUCCESS, new_code, num_attempts, time.time() - strategy_start_time
+                return (
+                    StrategyStatus.SUCCESS,
+                    new_code,
+                    num_attempts,
+                    time.time() - strategy_start_time,
+                    task_description,
+                )
 
 
 if __name__ == "__main__":

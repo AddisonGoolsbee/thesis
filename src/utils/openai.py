@@ -90,7 +90,7 @@ Based on this information, modify the task description to make it easier to gene
     return call_openai_api(prompt)
 
 
-def generate_build_analysis(task_description, new_code, build_output):
+def generate_build_analysis(task_description, new_code, build_output, original_task_description):
 
     prompt = f"""
 You are a software engineering assistant. You were given some code and a task description on how to modify it.
@@ -106,14 +106,17 @@ The stderr from compiling the code was:
 
 Based on this information, do you think the modification worked without introducing any significant NEW issues, including easy-to-fix warnings, AND do you think it successfully compiled?
 If the program didn't compile successfully due to something like a bad build command, but it wasn't because of your modification, return "stop: " plus a message to the user on what wen't wrong.
-If you think it didn't work, return "bad: " plus a new task description, which should replace the old task description with a new one that would generate successful code. Do not explain any reasoning.
-If you think yes, return "good" and your explanation. 
+If you think it DID work, return "good" and your explanation. 
+If you think it didn't work, return "bad: " plus a new task description that will replace the old one. If this is the case, the new task description must follow a few guidelines:
+- You must preserve the core strategy of the original task description: <{original_task_description}>, with the ultimate goal of modifying the code to reduce the number of unsafe lines
+- This new task description should work where the current one (and the original one) did not
+- Do not explain any reasoning. Just return the new task description.
 """
 
     return call_openai_api(prompt)
 
 
-def generate_test_analysis(task_description, original_code, new_code, run_output):
+def generate_test_analysis(task_description, original_code, new_code, run_output, original_task_description):
 
     prompt = f"""
 You are a software engineering assistant. You were given some code and a task description on how to modify it.
@@ -130,14 +133,17 @@ Here was the code you generated:
 The program was compiled successfully, however the output from running the program did not include the expected output.
 {run_output}
 
-Based on this information, make a new, better task description that will modify the original code to generate code that will produce the expected output. Do not explain any reasoning.
+Based on this information, make a new, better task description that will modify the original code to generate code that will produce the expected output.
+- You must preserve the core strategy of the original task description: <{original_task_description}>, with the ultimate goal of modifying the code to reduce the number of unsafe lines
+- This new task description should work where the current one (and the original one) did not
+- Do not explain any reasoning. Just return the new task description.
 """
 
     return call_openai_api(prompt)
 
 
 def generate_code_safety_analysis(
-    task_description, original_code, new_code, num_old_unsafe_lines, num_new_unsafe_lines
+    task_description, original_code, new_code, num_old_unsafe_lines, num_new_unsafe_lines, original_task_description
 ):
 
     prompt = f"""
@@ -156,7 +162,7 @@ The program compiled and ran successfully, preserving the original functionality
 
 However, {"the new code has the same number of unsafe lines as the original code" if num_old_unsafe_lines == num_new_unsafe_lines else "the new code has more unsafe lines than the original code"}, so your modification failed. ({num_new_unsafe_lines} new vs {num_old_unsafe_lines} old unsafe lines)
 
-If you must preserve the same rough strategy of <{task_description}>, do you think that it is possible to update the task description to actually make the code safer (less lines of unsafe code)? The original task description's core strategy must be preserved, only the fine details should be changed.
+If you must preserve the same rough strategy as the  <{task_description}>, do you think that it is possible to update the task description to actually make the code safer (less lines of unsafe code)? The original task description's core strategy must be preserved, only the fine details should be changed.
 If you don't think it is possible to make the code safer using a similar strategy, return "bad: " plus your reasoning. Reasoning should be concise.
 If you think it is possible, return "good: " plus a new task description that will modify the original code to generate code that will produce the expected output. Do not explain any reasoning.
 """

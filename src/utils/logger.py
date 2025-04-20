@@ -41,6 +41,7 @@ class Logger:
         run_dirs = [d for d in os.listdir(self.logger_path) if re.fullmatch(r"run\d{3}", d)]
         next_run = f"{(max(map(lambda d: int(d[3:]), run_dirs), default=0) + 1):03d}"
         self.run_dir = os.path.join(self.logger_path, f"run{next_run}")
+        print("Logs for this run can be found in ", self.run_dir)
         os.makedirs(self.run_dir)
         self.strategy_num = "000"
 
@@ -80,17 +81,20 @@ class Logger:
             )
         print(result)
 
+        log_message = f"Final prompt: {self.most_recent_prompt}\n{result}\n{unsafe_lines} unsafe lines remaining\n"
         with open(os.path.join(self.run_dir, "summary.log"), "a", encoding="utf-8") as f:
-            f.write(
-                f"Final prompt: {self.most_recent_prompt}\n{result}\n{unsafe_lines} unsafe lines remaining\n"
-            )
+            f.write(log_message + "\n")
+        self.log_verbose(log_message)
 
     def log_prompt(self, prompt):
         self.most_recent_prompt = prompt
         self.prompt_num = f"{(int(self.prompt_num) + 1):03d}"
+
+        log_message = f"Prompt {int(self.prompt_num)}: {prompt}"
         with open(os.path.join(self.strategy_dir, "summary.log"), "a", encoding="utf-8") as f:
-            f.write(("\n" if int(self.prompt_num) > 1 else "") + f"Prompt {int(self.prompt_num)}: {prompt}\n")
-        print(f"Prompt {int(self.prompt_num)}: {prompt}")
+            f.write(("\n" if int(self.prompt_num) > 1 else "") + log_message + "\n")
+        print(log_message)
+        self.log_verbose(log_message)
 
     def log_generated_code(self, replacements, new_code, attempt_num, time_taken):
         with open(os.path.join(self.strategy_dir, f"replacements{self.prompt_num}.json"), "w") as f:
@@ -99,12 +103,21 @@ class Logger:
             f.write(new_code)
 
         with open(os.path.join(self.strategy_dir, "summary.log"), "a", encoding="utf-8") as f:
-            f.write(f"Successful generation in {attempt_num} attempt{'s' if attempt_num != 1 else ''} ({time_taken:.2f}s)\n")
+            log_message = f"Successful generation in {attempt_num} attempt{'s' if attempt_num != 1 else ''} ({time_taken:.2f}s)"
+            f.write(log_message + "\n")
+            self.log_verbose(log_message)
 
     def log_status(self, status, time_taken=None):
+        log_message = status + (f" ({time_taken:.2f}s)" if time_taken else "")
+
         with open(os.path.join(self.strategy_dir, "summary.log"), "a", encoding="utf-8") as f:
-            f.write(status + (f" ({time_taken:.2f}s)" if time_taken else "") + "\n")
-        print(status + (f" ({time_taken:.2f}s)" if time_taken else ""))
+            f.write(log_message + "\n")
+        print(log_message)
+        self.log_verbose(log_message)
+
+    def log_verbose(self, status):
+        with open(os.path.join(self.strategy_dir, "verbose_summary.log"), "a", encoding="utf-8") as f:
+            f.write(status + "\n")
 
     def update_best_code(self, new_code):
         with open(os.path.join(self.run_dir, "best.rs"), "w", encoding="utf-8") as f:
