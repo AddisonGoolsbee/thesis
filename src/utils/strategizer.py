@@ -1,6 +1,73 @@
+from enum import Enum, auto
+from utils.openai import call_openai_api
+from utils.logger import Logger
+
+
+class StrategyStatus(Enum):
+    SUCCESS = auto()
+    FAILED_GENERATION = auto()
+    CODE_SAFETY_DETERIORATED = auto()
+    CODE_SAFETY_UNCHANGED = auto()
+    FAILED_TOO_LONG = auto()
+
+
+class Strategy:
+    def __init__(self, prompt, result):
+        self.prompt = prompt
+        self.result = result
+
+
 class Strategizer:
-    def __init__(self):
-        pass
+    def __init__(self, logger: Logger):
+        self.logger = logger
+        self.strategies: list[Strategy] = []
 
     def generate_strategy(self, current_code):
-        return 'Modify the code so that partition and quickSort use &mut [i32] slices instead of raw pointers, while preserving the #[no_mangle] pub unsafe extern "C" interface for FFI compatibility.'
+        print("Failed strategies: ", self.get_failed_strategies())
+
+        prompt = f"""
+You are a software engineering assistant. Your goal is to make a rust file safer, as defined by the number of unsafe lines in the code.
+
+Here is the current code:
+{current_code}
+{self.get_failed_strategies()}
+Based on the current code, generate a description of a modification strategy that would make the code safer. The strategy should be 1-2 sentences. Make sure the strategy makes the code SAFER, not just more idiomatic/cleaner/faster.
+Do not explain your reasoning. Just return the strategy.
+"""
+        strategy = call_openai_api(prompt)
+        self.logger.log_strategy(strategy)
+        return strategy
+    
+    def get_failed_strategies(self):
+        success_count = sum(1 for strategy in self.strategies if strategy.result == StrategyStatus.SUCCESS)
+        if success_count == 0:
+            return ""
+        text = f"\nOut of the {len(self.strategies)} strategies you have tried so far, the following ones did not make the code safer:\n"
+        for strategy in self.strategies:
+            match strategy.result:
+                case StrategyStatus.FAILED_TOO_LONG:
+                    text += f"For this strategy, you spent too long on without reaching a positive safety result: {strategy.prompt}\n"
+                case StrategyStatus.CODE_SAFETY_DETERIORATED:
+                    text += f"This strategy made the code less safe: {strategy.prompt}\n"
+                case StrategyStatus.CODE_SAFETY_UNCHANGED:
+                    text += f"This strategy made no changes to the code safety: {strategy.prompt}\n"
+                case _:
+                    pass
+        return text + "\nDo not repeat these strategies unless you have a good reason to do so."
+
+    def add_strategy(self, strategy_prompt, result):
+        strategy = Strategy(strategy_prompt, result)
+        self.strategies.append(strategy)
+        log_message = ""
+        match result:
+            case StrategyStatus.SUCCESS:
+                log_message = "Successfully made the code safer."
+            case StrategyStatus.CODE_SAFETY_DETERIORATED:
+                log_message = "Code safety deteriorated."
+            case StrategyStatus.CODE_SAFETY_UNCHANGED:
+                log_message = "Code safety unchanged."
+            case StrategyStatus.FAILED_TOO_LONG:
+                log_message = "Failed to generate a strategy in time."
+            case _:
+                log_message = "Unknown error."
+        self.logger.log_strategy_result(log_message)

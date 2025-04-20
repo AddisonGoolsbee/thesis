@@ -51,11 +51,16 @@ class Logger:
         os.makedirs(self.run_dir)
         self.strategy_num = "000"
 
-    def begin_strategy(self, prompt):
+    def log_strategy(self, prompt):
         self.strategy_num = f"{(int(self.strategy_num) + 1):03d}"
         self.strategy_path = os.path.join(self.run_dir, f"strategy{self.strategy_num}")
         os.makedirs(self.strategy_path)
         self.prompt_num = "000"
+
+    def log_strategy_result(self, result):
+        with open(os.path.join(self.strategy_path, "summary.log"), "a", encoding="utf-8") as f:
+            f.write(result + "\n")
+        print(result)
 
     def log_prompt(self, prompt):
         self.prompt_num = f"{(int(self.prompt_num) + 1):03d}"

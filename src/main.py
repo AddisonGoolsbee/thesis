@@ -11,26 +11,16 @@ from utils.openai import (
 from utils.io import Timer, run_command_with_timeout
 from utils.logger import Logger
 from utils.misc import count_unsafe
-from utils.strategizer import Strategizer
+from utils.strategizer import Strategizer, StrategyStatus
 from config import *
-
-
-class StrategyStatus(Enum):
-    SUCCESS = auto()
-    FAILED_GENERATION = auto()
-    FAILED_COMPILATION = auto()
-    FAILED_TEST = auto()
-    CODE_SAFETY_IMPROVED = auto()
-    CODE_SAFETY_DETERIORATED = auto()
-    CODE_SAFETY_UNCHANGED = auto()
 
 
 class Oxidizer:
     MAX_GENERATION_RETRIES = 5
-
+    MAX_PROMPTS = 10
     def __init__(self):
         self.logger = Logger()
-        self.strategizer = Strategizer()
+        self.strategizer = Strategizer(self.logger)
         self.best_code = None
 
         atexit.register(self.cleanup)
@@ -48,18 +38,28 @@ class Oxidizer:
 
         # Main loop:
         while True:
-            strategy_prompt = self.strategizer.generate_strategy(current_code)
-            self.logger.begin_strategy(strategy_prompt)
+            with Timer("Generating new strategy..."):
+                strategy_prompt = self.strategizer.generate_strategy(current_code)
+
             result = self.run_strategy(strategy_prompt, current_code)
+            self.strategizer.add_strategy(strategy_prompt, result)
+            
+            if result == StrategyStatus.SUCCESS:
+                self.best_code = current_code
+
 
     def run_strategy(self, strategy_prompt, current_code):
         task_description = strategy_prompt
+        num_prompts = 0
 
         while True:
             self.logger.log_prompt(task_description)
+            num_prompts += 1
+            if num_prompts > self.MAX_PROMPTS:
+                return StrategyStatus.FAILED_TOO_LONG
 
             # Step 1: Generate new code via patch file
-            with Timer("Generating..."):
+            with Timer("Generating code..."):
                 for attempt in range(1, self.MAX_GENERATION_RETRIES + 1):
                     try:
                         new_code, replacements = generate_code(task_description, current_code)
@@ -145,7 +145,7 @@ class Oxidizer:
                         return StrategyStatus.CODE_SAFETY_UNCHANGED
             else:
                 self.logger.log_status("Code safety improved ✅")
-                return StrategyStatus.CODE_SAFETY_IMPROVED
+                return StrategyStatus.SUCCESS
 
 
 if __name__ == "__main__":
