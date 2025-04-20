@@ -53,32 +53,32 @@ def count_unsafe(rust_code: str, debug: bool = False) -> tuple[int, int]:
 
     for i, line in enumerate(lines):
         # Count opening and closing braces to track nesting
-        bracket_depth += line.count("{")
-        bracket_depth -= line.count("}")
+        if in_unsafe_block: 
+            bracket_depth += line.count("{")
+            bracket_depth -= line.count("}")
 
         # Check for start of unsafe block - only if we're not already in an unsafe block
         if "unsafe" in line and not in_unsafe_block:
             found_unsafe = True
             # Count the unsafe line itself
-            if count_code_in_line(line):
+            if count_code_in_line(line.replace("unsafe", "").strip()):
                 if debug:
                     print(f"Unsafe line {i+1}: {line}")
                 num_unsafe_lines += 1
-            # Check if opening brace is on same line
+
             if "{" in line:
                 in_unsafe_block = True
                 num_unsafe_blocks += 1
                 found_unsafe = False
-                # Check for additional code on same line as opening brace
-                if count_code_in_line(line.replace("unsafe", "").strip()):
-                    if debug:
-                        print(f"Unsafe line {i+1}: {line}")
-                    num_unsafe_lines += 1
+                bracket_depth += line.count("{")
+            # Check for additional code on same line as opening brace
+        
         # Check if opening brace is on next line after unsafe - only if we're not already in an unsafe block
         elif found_unsafe and "{" in line and not in_unsafe_block:
             in_unsafe_block = True
             num_unsafe_blocks += 1
             found_unsafe = False
+            bracket_depth += line.count("{")
             # Check for code on same line as opening brace
             if count_code_in_line(line):
                 if debug:
@@ -98,17 +98,25 @@ def count_unsafe(rust_code: str, debug: bool = False) -> tuple[int, int]:
                 print(f"Unsafe line {i+1}: {line}")
             num_unsafe_lines += 1
 
-    return num_unsafe_blocks, num_unsafe_lines
+    return num_unsafe_lines, num_unsafe_blocks
+
 
 if __name__ == "__main__":
-    test_files = ["src/tests/test1.txt", "src/tests/test2.txt", "src/tests/test3.txt", "src/tests/test4.txt"]
+    test_files = [
+        "src/tests/test1.txt",
+        "src/tests/test2.txt",
+        "src/tests/test3.txt",
+        "src/tests/test4.txt",
+        "src/examples/quicksort/src/main.rs",
+        "src/log/run001/goal001/code001.rs",
+    ]
 
     for test_file in test_files:
         print(f"\nTesting {test_file}:")
         try:
             with open(test_file, "r") as f:
                 code = f.read()
-                block_count, line_count = count_unsafe(code, debug=True)
+                line_count, block_count = count_unsafe(code, debug=True)
                 print(f"Found {block_count} unsafe blocks")
                 print(f"Total lines of code inside unsafe blocks: {line_count}")
         except FileNotFoundError:

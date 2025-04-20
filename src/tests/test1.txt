@@ -1,9 +1,10 @@
 fn main() {
+    let mut data = vec![3, 7, 1, 4, 9, 2];
+    let len = data.len();
+
     unsafe {
-        let x = 5;
+        quickSort(data.as_mut_ptr(), 0, (len - 1) as i32);
     }
-    
-    unsafe fn dangerous() {
-        let y = 10;
-    }
-} 
+
+    println!("{:?}", data); // Should print a sorted array
+}

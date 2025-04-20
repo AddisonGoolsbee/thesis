@@ -4,9 +4,10 @@ fn main() {
         let x = 5;
     }
     
-    unsafe
-    fn dangerous()
+    unsafe fn dangerous()
     {
         let y = 10;
     }
 } 
+
+unsafe {something ehre}
