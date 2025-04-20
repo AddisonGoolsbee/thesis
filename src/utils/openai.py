@@ -1,8 +1,9 @@
-import json
 from dotenv import load_dotenv
 import openai
 import os
 from pydantic import BaseModel
+
+from utils.misc import apply_changes
 
 load_dotenv()
 openai.api_key = os.getenv("OPENAI_API_KEY")
@@ -40,16 +41,6 @@ def call_openai_api_for_patch(prompt):
     )
 
     return completion.choices[0].message.content
-
-
-def apply_changes(current_code: str, changes: str) -> str:
-    changes = json.loads(changes)
-    for replacement in changes["replacements"]:
-        if replacement["original"] not in current_code:
-            raise ValueError(f"Replacement string not found in code: {replacement['original']}")
-        current_code = current_code.replace(replacement["original"], replacement["new"])
-
-    return current_code
 
 
 def generate_code(task_description, current_code):
@@ -128,7 +119,9 @@ Based on this information, make a new, better task description that will modify 
     return call_openai_api(prompt)
 
 
-def generate_code_safety_analysis(task_description, original_code, new_code, num_old_unsafe_lines, num_new_unsafe_lines):
+def generate_code_safety_analysis(
+    task_description, original_code, new_code, num_old_unsafe_lines, num_new_unsafe_lines
+):
 
     prompt = f"""
 You are a software engineering assistant. You were given some code and a task description on how to modify it to make it safer.

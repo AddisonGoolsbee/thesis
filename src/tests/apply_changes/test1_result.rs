@@ -1,0 +1,56 @@
+#![allow(
+    dead_code,
+    mutable_transmutes,
+    non_camel_case_types,
+    non_snake_case,
+    non_upper_case_globals,
+    unused_assignments,
+    unused_mut
+)]
+use libc;
+fn swap(a: &mut i32, b: &mut i32) { let t = *a; *a = *b; *b = t; }
+#[no_mangle]
+pub unsafe extern "C" fn partition(
+    mut arr: *mut libc::c_int,
+    mut low: libc::c_int,
+    mut high: libc::c_int,
+) -> libc::c_int {
+    let mut pivot: libc::c_int = *arr.offset(high as isize);
+    let mut i: libc::c_int = low - 1 as libc::c_int;
+    let mut j: libc::c_int = low;
+    while j <= high - 1 as libc::c_int {
+        if *arr.offset(j as isize) <= pivot {
+            i += 1;
+            swap(&mut *arr.offset(i as isize), &mut *arr.offset(j as isize));
+        }
+        j += 1;
+    }
+    swap(
+        &mut *arr.offset((i + 1 as libc::c_int) as isize),
+        &mut *arr.offset(high as isize),
+    );
+    return i + 1 as libc::c_int;
+}
+#[no_mangle]
+pub unsafe extern "C" fn quickSort(
+    mut arr: *mut libc::c_int,
+    mut low: libc::c_int,
+    mut high: libc::c_int,
+) {
+    if low < high {
+        let mut i: libc::c_int = partition(arr, low, high);
+        quickSort(arr, low, i - 1 as libc::c_int);
+        quickSort(arr, i + 1 as libc::c_int, high);
+    }
+}
+
+fn main() {
+    let mut data = vec![3, 7, 1, 4, 9, 2];
+    let len = data.len();
+
+    unsafe {
+        quickSort(data.as_mut_ptr(), 0, (len - 1) as i32);
+    }
+
+    println!("{:?}", data); // Should print a sorted array
+}

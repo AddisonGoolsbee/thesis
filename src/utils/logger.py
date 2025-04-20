@@ -66,7 +66,7 @@ class Logger:
         self.prompt_num = f"{(int(self.prompt_num) + 1):03d}"
         with open(os.path.join(self.strategy_path, "summary.log"), "a", encoding="utf-8") as f:
             f.write(f"Prompt {int(self.prompt_num)}\n{prompt}\n")
-        print("Prompt: ", prompt)
+        print(f"{"\n" if int(self.prompt_num) > 1 else ""}Prompt {int(self.prompt_num)}: {prompt}")
 
     def log_generated_code(self, replacements, new_code, attempt_num):
         with open(os.path.join(self.strategy_path, f"replacements{self.prompt_num}.json"), "w") as f:

@@ -23,7 +23,8 @@ class Strategizer:
         self.strategies: list[Strategy] = []
 
     def generate_strategy(self, current_code):
-        print("Failed strategies: ", self.get_failed_strategies())
+        if len(self.strategies) > 0:
+            print("Failed strategies: ", self.get_failed_strategies())
 
         prompt = f"""
 You are a software engineering assistant. Your goal is to make a rust file safer, as defined by the number of unsafe lines in the code.
@@ -31,7 +32,10 @@ You are a software engineering assistant. Your goal is to make a rust file safer
 Here is the current code:
 {current_code}
 {self.get_failed_strategies()}
-Based on the current code, generate a description of a modification strategy that would make the code safer. The strategy should be 1-2 sentences. Make sure the strategy makes the code SAFER, not just more idiomatic/cleaner/faster.
+Based on the current code, generate a description of a modification strategy that would make the code safer.
+The strategy should be 1-2 sentences, and should only change an isolated amount of the code, instead of making sweeping changes.
+The strategy should be a single isolated strategy, such as "change this struct to use generic types to isolate the unsafe code" or "change this function to use the rust standard library instead of a c library". 
+Make sure the strategy makes the code SAFER, not just more idiomatic/cleaner/faster. Make sure you include removing the "unsafe" keyword if it will no longer be needed.
 Do not explain your reasoning. Just return the strategy.
 """
         strategy = call_openai_api(prompt)

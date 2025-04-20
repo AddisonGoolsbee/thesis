@@ -39,14 +39,17 @@ class Oxidizer:
         # Main loop:
         while True:
             with Timer("Generating new strategy..."):
-                strategy_prompt = self.strategizer.generate_strategy(current_code)
+                strategy_prompt = self.strategizer.generate_strategy(self.best_code)
 
-            result = self.run_strategy(strategy_prompt, current_code)
+            result, new_code = self.run_strategy(strategy_prompt, self.best_code)
             self.strategizer.add_strategy(strategy_prompt, result)
-            
-            if result == StrategyStatus.SUCCESS:
-                self.best_code = current_code
 
+            if result == StrategyStatus.SUCCESS:
+                self.best_code = new_code
+
+            if self.current_unsafe_lines == 0:
+                self.logger.log_status("No unsafe lines remaining. Exiting.")
+                break
 
     def run_strategy(self, strategy_prompt, current_code):
         task_description = strategy_prompt
@@ -69,7 +72,7 @@ class Oxidizer:
                         print(f"\nError: {e} (Attempt {attempt}/{self.MAX_GENERATION_RETRIES})")
                         if attempt == self.MAX_GENERATION_RETRIES:
                             self.logger.log_status("Max code generation retries reached. Aborting.")
-                            return StrategyStatus.FAILED_GENERATION
+                            return StrategyStatus.FAILED_GENERATION, current_code
 
             with open(CODE_PATH, "w", encoding="utf-8") as f:
                 f.write(new_code)
@@ -113,6 +116,7 @@ class Oxidizer:
                         new_code,
                         f"The excpected output was:\n{BASIC_TEST_EXPECTED_OUTPUT}\nThe output from running the program was:\n{run_output}",
                     )
+                    task_description = analysis
                 continue
 
             # Step 4: Compare lines of unsafe code
@@ -140,12 +144,13 @@ class Oxidizer:
                         f"Strategy cannot be used to make code safer for the following reason: {analysis[5:]}"
                     )
                     if num_old_unsafe_lines > num_new_unsafe_lines:
-                        return StrategyStatus.CODE_SAFETY_DETERIORATED
+                        return StrategyStatus.CODE_SAFETY_DETERIORATED, new_code
                     else:
-                        return StrategyStatus.CODE_SAFETY_UNCHANGED
+                        return StrategyStatus.CODE_SAFETY_UNCHANGED, new_code
             else:
                 self.logger.log_status("Code safety improved ✅")
-                return StrategyStatus.SUCCESS
+                self.current_unsafe_lines = num_new_unsafe_lines
+                return StrategyStatus.SUCCESS, new_code
 
 
 if __name__ == "__main__":
