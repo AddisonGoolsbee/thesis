@@ -1,6 +1,7 @@
 import shutil
 import subprocess
-
+from enum import Enum, auto
+import atexit
 from utils.openai import (
     generate_basic_test_analysis,
     generate_code,
@@ -14,37 +15,61 @@ from utils.strategizer import Strategizer
 from config import *
 
 
-def main():
-    MAX_RETRIES = 5
+class StrategyStatus(Enum):
+    SUCCESS = auto()
+    FAILED_GENERATION = auto()
+    FAILED_COMPILATION = auto()
+    FAILED_TEST = auto()
+    CODE_SAFETY_IMPROVED = auto()
+    CODE_SAFETY_DETERIORATED = auto()
+    CODE_SAFETY_UNCHANGED = auto()
 
-    with open(CODE_PATH, "r", encoding="utf-8") as f:
-        current_code = f.read()
-        new_code = current_code
 
-    logger = Logger()
-    strategizer = Strategizer()
-    
-    # Main loop:
-    while True:
-        task_description = strategizer.generate_strategy(current_code)
-        logger.begin_strategy(task_description)
+class Oxidizer:
+    MAX_GENERATION_RETRIES = 5
 
-        # Individual strategy loop:
+    def __init__(self):
+        self.logger = Logger()
+        self.strategizer = Strategizer()
+        self.best_code = None
+
+        atexit.register(self.cleanup)
+
+    def cleanup(self):
+        shutil.copy(self.logger.logger_original_path, self.logger.initial_path)
+        print("Reverted code to original state.")
+        print("Logs saved to ", self.logger.run_dir)
+
+    def run(self):
+        with open(CODE_PATH, "r", encoding="utf-8") as f:
+            current_code = f.read()
+            self.current_unsafe_lines = count_unsafe(current_code)
+            self.best_code = current_code
+
+        # Main loop:
         while True:
-            logger.log_prompt(task_description)
+            strategy_prompt = self.strategizer.generate_strategy(current_code)
+            self.logger.begin_strategy(strategy_prompt)
+            result = self.run_strategy(strategy_prompt, current_code)
+
+    def run_strategy(self, strategy_prompt, current_code):
+        task_description = strategy_prompt
+
+        while True:
+            self.logger.log_prompt(task_description)
 
             # Step 1: Generate new code via patch file
             with Timer("Generating..."):
-                for attempt in range(1, MAX_RETRIES + 1):
+                for attempt in range(1, self.MAX_GENERATION_RETRIES + 1):
                     try:
                         new_code, replacements = generate_code(task_description, current_code)
-                        logger.log_generated_code(replacements, new_code, attempt)
+                        self.logger.log_generated_code(replacements, new_code, attempt)
                         break
                     except Exception as e:
-                        print(f"\nError: {e} (Attempt {attempt}/{MAX_RETRIES})")
-                        if attempt == MAX_RETRIES:
-                            logger.log_status("Max code generation retries reached. Aborting.")
-                            exit(1)
+                        print(f"\nError: {e} (Attempt {attempt}/{self.MAX_GENERATION_RETRIES})")
+                        if attempt == self.MAX_GENERATION_RETRIES:
+                            self.logger.log_status("Max code generation retries reached. Aborting.")
+                            return StrategyStatus.FAILED_GENERATION
 
             with open(CODE_PATH, "w", encoding="utf-8") as f:
                 f.write(new_code)
@@ -58,29 +83,29 @@ def main():
                 analysis = generate_build_analysis(task_description, new_code, build_output)
 
             if analysis.lower().startswith("good"):
-                logger.log_status("Compilation ✅")
+                self.logger.log_status("Compilation ✅")
             elif analysis.lower().startswith("bad: "):
-                logger.log_status("Compilation ❌")
+                self.logger.log_status("Compilation ❌")
                 task_description = analysis[5:]
                 continue
             elif analysis.lower().startswith("stop: "):
-                logger.log_status("Compilation ❌ (build command error)")
-                logger.log_status(f"Build command error: {analysis[6:]}")
+                self.logger.log_status("Compilation ❌ (build command error)")
+                self.logger.log_status(f"Build command error: {analysis[6:]}")
+                exit(1)
             else:
-                logger.log_status("Analysis unsuccessful, retrying...")
+                self.logger.log_status("Analysis unsuccessful, retrying...")
                 continue
 
             # Step 3: Run the program with a basic unit test
             with Timer("Running basic test..."):
                 run_output = run_command_with_timeout(BASIC_TEST_CMD, BASIC_TEST_TIMEOUT, BASIC_TEST_EXPECTED_OUTPUT)
-                print(run_output)
 
             if BASIC_TEST_EXPECTED_OUTPUT in run_output:
-                logger.log_status("Basic test ✅")
+                self.logger.log_status("Basic test ✅")
             else:
-                logger.log_status("Basic test ❌")
-                logger.log_status(f"Expected output: {BASIC_TEST_EXPECTED_OUTPUT}")
-                logger.log_status(f"Output: {run_output}")
+                self.logger.log_status("Basic test ❌")
+                self.logger.log_status(f"Expected output: {BASIC_TEST_EXPECTED_OUTPUT}")
+                self.logger.log_status(f"Output: {run_output}")
                 with Timer("Analyzing basic test..."):
                     analysis = generate_basic_test_analysis(
                         task_description,
@@ -93,9 +118,11 @@ def main():
             # Step 4: Compare lines of unsafe code
             num_old_unsafe_lines, _ = count_unsafe(current_code)
             num_new_unsafe_lines, _ = count_unsafe(new_code)
-            logger.log_status(f"Result: {num_old_unsafe_lines} unsafe lines -> {num_new_unsafe_lines} unsafe lines")
+            self.logger.log_status(
+                f"Result: {num_old_unsafe_lines} unsafe lines -> {num_new_unsafe_lines} unsafe lines"
+            )
             if num_old_unsafe_lines <= num_new_unsafe_lines:
-                logger.log_status("Code safety improved ❌")
+                self.logger.log_status("Code safety improved ❌")
                 with Timer("Analyzing why new code is not safer..."):
                     analysis = generate_code_safety_analysis(
                         task_description,
@@ -105,31 +132,28 @@ def main():
                         num_new_unsafe_lines,
                     )
                 if analysis.lower().startswith("good: "):
-                    logger.log_status("Strategy can still be used. Trying with new prompt.")
+                    self.logger.log_status("Strategy can still be used. Trying with new prompt.")
                     task_description = analysis[6:]
                     continue
-                elif analysis.lower().startswith("bad: "):
-                    logger.log_status(
+                else:
+                    self.logger.log_status(
                         f"Strategy cannot be used to make code safer for the following reason: {analysis[5:]}"
                     )
+                    if num_old_unsafe_lines > num_new_unsafe_lines:
+                        return StrategyStatus.CODE_SAFETY_DETERIORATED
+                    else:
+                        return StrategyStatus.CODE_SAFETY_UNCHANGED
             else:
-                logger.log_status("Code safety improved ✅")
-
-            print("Reached the end of the loop")
-            break
+                self.logger.log_status("Code safety improved ✅")
+                return StrategyStatus.CODE_SAFETY_IMPROVED
 
 
 if __name__ == "__main__":
-    logger = Logger()
+    oxidizer = Oxidizer()
     try:
-        main()
+        oxidizer.run()
     except KeyboardInterrupt:
         print("\nExiting program via keyboard interrupt.")
     except Exception as e:
         print("\nProgram crashed with exception:")
         print(e)
-    finally:
-        shutil.copy(logger.logger_original_path, logger.initial_path)
-        print("Reverted code to original state.")
-        print("Logs saved to ", logger.run_dir)
-        exit(0)
