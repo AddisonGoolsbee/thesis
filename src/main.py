@@ -89,22 +89,25 @@ class Oxidizer:
                 process = subprocess.run(BUILD_CMD, shell=True, capture_output=True, text=True)
             build_output = f"[Return code: {process.returncode}]\n {process.stderr}"
 
-            with Timer("Analyzing compilation..."):
-                analysis = generate_build_analysis(task_description, new_code, build_output)
-
-            if analysis.lower().startswith("good"):
+            if process.returncode == 0 and process.stderr == "":
                 self.logger.log_status("Compilation ✅")
-            elif analysis.lower().startswith("bad: "):
-                self.logger.log_status("Compilation ❌")
-                task_description = analysis[5:]
-                continue
-            elif analysis.lower().startswith("stop: "):
-                self.logger.log_status("Compilation ❌ (build command error)")
-                self.logger.log_status(f"Build command error: {analysis[6:]}")
-                exit(1)
             else:
-                self.logger.log_status("Analysis unsuccessful, retrying...")
-                continue
+                with Timer("Analyzing compilation..."):
+                    analysis = generate_build_analysis(task_description, new_code, build_output)
+
+                if analysis.lower().startswith("good"):
+                    self.logger.log_status("Compilation ✅")
+                elif analysis.lower().startswith("bad: "):
+                    self.logger.log_status("Compilation ❌")
+                    task_description = analysis[5:]
+                    continue
+                elif analysis.lower().startswith("stop: "):
+                    self.logger.log_status("Compilation ❌ (build command error)")
+                    self.logger.log_status(f"Build command error: {analysis[6:]}")
+                    exit(1)
+                else:
+                    self.logger.log_status("Analysis unsuccessful, retrying...")
+                    continue
 
             # Step 3: Run the program with a basic unit test
             with Timer("Running basic test..."):
