@@ -49,17 +49,17 @@ class Logger:
         next_run = f"{(max(map(lambda d: int(d[3:]), run_dirs), default=0) + 1):03d}"
         self.run_dir = os.path.join(self.logger_path, f"run{next_run}")
         os.makedirs(self.run_dir)
-
         self.strategy_num = "000"
 
     def begin_strategy(self, prompt):
         self.strategy_num = f"{(int(self.strategy_num) + 1):03d}"
         self.strategy_path = os.path.join(self.run_dir, f"strategy{self.strategy_num}")
         os.makedirs(self.strategy_path)
+        self.prompt_num = "000"
 
-        self.prompt_num = "001"
-
-        with open(os.path.join(self.strategy_path, "prompts.txt"), "w", encoding="utf-8") as f:
+    def log_prompt(self, prompt):
+        self.prompt_num = f"{(int(self.prompt_num) + 1):03d}"
+        with open(os.path.join(self.strategy_path, "summary.log"), "a", encoding="utf-8") as f:
             f.write(f"Prompt {int(self.prompt_num)}\n{prompt}\n")
         print("Prompt: ", prompt)
 
@@ -68,12 +68,11 @@ class Logger:
             json.dump(json.loads(replacements), f, indent=4)
         with open(os.path.join(self.strategy_path, f"code{self.prompt_num}.rs"), "w") as f:
             f.write(new_code)
-        self.prompt_num = f"{(int(self.prompt_num) + 1):03d}"
 
-        with open(os.path.join(self.strategy_path, "prompts.txt"), "a", encoding="utf-8") as f:
+        with open(os.path.join(self.strategy_path, "summary.log"), "a", encoding="utf-8") as f:
             f.write(f"Successful generation after {attempt_num} attempt(s)\n")
 
     def log_status(self, status):
-        with open(os.path.join(self.strategy_path, "prompts.txt"), "a", encoding="utf-8") as f:
+        with open(os.path.join(self.strategy_path, "summary.log"), "a", encoding="utf-8") as f:
             f.write(status + "\n")
         print(status)

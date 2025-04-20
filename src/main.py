@@ -14,7 +14,7 @@ from config import *
 
 
 def main():
-    task_description = "Add some comments to the code"
+    task_description = "Modify the code so that partition and quickSort use &mut [i32] slices instead of raw pointers, while preserving the #[no_mangle] pub unsafe extern \"C\" interface for FFI compatibility."
 
     with open(CODE_PATH, "r", encoding="utf-8") as f:
         current_code = f.read()
@@ -27,6 +27,8 @@ def main():
 
     # Main loop:
     while True:
+        logger.log_prompt(task_description)
+
         # Step 1: Generate new code via patch file
         with Timer("Generating..."):
             for attempt in range(1, MAX_RETRIES + 1):
@@ -104,7 +106,7 @@ def main():
                 continue
             elif analysis.lower().startswith("bad: "):
                 logger.log_status(
-                    f"Strategy cannot be used to make code safer for the following reason: {analysis[6:]}"
+                    f"Strategy cannot be used to make code safer for the following reason: {analysis[5:]}"
                 )
         else:
             logger.log_status("Code safety improved ✅")
