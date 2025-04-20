@@ -1,9 +1,7 @@
-import shutil
 import subprocess
-from enum import Enum, auto
-import atexit
+import time
 from utils.openai import (
-    generate_basic_test_analysis,
+    generate_test_analysis,
     generate_code,
     generate_build_analysis,
     generate_code_safety_analysis,
@@ -25,29 +23,25 @@ class Oxidizer:
         self.strategizer = Strategizer(self.logger)
         self.best_code = None
 
-        atexit.register(self.cleanup)
-
-    def cleanup(self):
-        shutil.copy(self.logger.logger_original_path, self.logger.initial_path)
-        print("Reverted code to original state.")
-        print("Logs saved to ", self.logger.run_dir)
-
     def run(self):
         with open(CODE_PATH, "r", encoding="utf-8") as f:
             current_code = f.read()
-            self.current_unsafe_lines = count_unsafe(current_code)
+            self.current_unsafe_lines, _ = count_unsafe(current_code)
             self.best_code = current_code
+
+        self.logger.begin_run(self.current_unsafe_lines)
 
         # Main loop:
         while True:
             with Timer("Generating new strategy..."):
                 strategy_prompt = self.strategizer.generate_strategy(self.best_code)
 
-            result, new_code = self.run_strategy(strategy_prompt, self.best_code)
-            self.strategizer.add_strategy(strategy_prompt, result)
+            result, new_code, attempts, time_taken = self.run_strategy(strategy_prompt, self.best_code)
+            self.strategizer.add_strategy(strategy_prompt, result, attempts, time_taken, self.current_unsafe_lines)
 
             if result == StrategyStatus.SUCCESS:
                 self.best_code = new_code
+                self.logger.update_best_code(new_code)
 
             if self.current_unsafe_lines == 0:
                 self.logger.log_status("No unsafe lines remaining. Exiting.")
@@ -55,25 +49,28 @@ class Oxidizer:
 
     def run_strategy(self, strategy_prompt, current_code):
         task_description = strategy_prompt
-        num_prompts = 0
+        num_attempts = 0
+        strategy_start_time = time.time()
 
         while True:
+            attempt_start_time = time.time()
             self.logger.log_prompt(task_description)
-            num_prompts += 1
-            if num_prompts > self.MAX_PROMPTS:
-                return StrategyStatus.FAILED_TOO_LONG
+            num_attempts += 1
+            if num_attempts > self.MAX_PROMPTS:
+                return StrategyStatus.FAILED_TOO_LONG, current_code, self.MAX_PROMPTS, time.time() - strategy_start_time
 
             # Step 1: Generate new code via patch file
+            step_start_time = time.time()
             with Timer("Generating code..."):
-                for attempt in range(1, self.MAX_GENERATION_RETRIES + 1):
+                for generation_attempt in range(1, self.MAX_GENERATION_RETRIES + 1):
                     try:
                         new_code, replacements = generate_code(task_description, current_code)
-                        self.logger.log_generated_code(replacements, new_code, attempt)
+                        self.logger.log_generated_code(replacements, new_code, generation_attempt, time.time() - step_start_time)
                         break
                     except Exception as e:
-                        print(f"\nError: {e} (Attempt {attempt}/{self.MAX_GENERATION_RETRIES})")
-                        if attempt == self.MAX_GENERATION_RETRIES:
-                            self.logger.log_status("Max code generation retries reached. Aborting.")
+                        print(f"\nError: {e} (Attempt {generation_attempt}/{self.MAX_GENERATION_RETRIES})")
+                        if generation_attempt == self.MAX_GENERATION_RETRIES:
+                            self.logger.log_status("Max code generation retries reached. Aborting.", time.time() - step_start_time)
                             analysis = generate_code_generation_failure_analysis(
                                 task_description,
                                 current_code,
@@ -84,52 +81,60 @@ class Oxidizer:
             with open(CODE_PATH, "w", encoding="utf-8") as f:
                 f.write(new_code)
 
-            # Step 2: Compilation
+            # Step 2: Compile the code
+            step_start_time = time.time()
             with Timer("Building..."):
                 process = subprocess.run(BUILD_CMD, shell=True, capture_output=True, text=True)
             build_output = f"[Return code: {process.returncode}]\n {process.stderr}"
 
             if process.returncode == 0 and process.stderr == "":
-                self.logger.log_status("Compilation ✅")
+                self.logger.log_status("Compilation ✅", time.time() - step_start_time)
             else:
                 with Timer("Analyzing compilation..."):
                     analysis = generate_build_analysis(task_description, new_code, build_output)
 
                 if analysis.lower().startswith("good"):
-                    self.logger.log_status("Compilation ✅")
+                    self.logger.log_status("Compilation ✅", time.time() - step_start_time)
                 elif analysis.lower().startswith("bad: "):
-                    self.logger.log_status("Compilation ❌")
+                    self.logger.log_status("Compilation ❌", time.time() - step_start_time)
                     task_description = analysis[5:]
+                    self.logger.log_status(f"Attempt took {time.time() - attempt_start_time:.2f}s")
                     continue
                 elif analysis.lower().startswith("stop: "):
-                    self.logger.log_status("Compilation ❌ (build command error)")
+                    self.logger.log_status("Compilation ❌ (build command error)", time.time() - step_start_time)
                     self.logger.log_status(f"Build command error: {analysis[6:]}")
                     exit(1)
                 else:
-                    self.logger.log_status("Analysis unsuccessful, retrying...")
+                    self.logger.log_status("Analysis unsuccessful, retrying...", time.time() - step_start_time)
+                    self.logger.log_status(f"Attempt took {time.time() - attempt_start_time:.2f}s")
                     continue
 
-            # Step 3: Run the program with a basic unit test
-            with Timer("Running basic test..."):
-                run_output = run_command_with_timeout(BASIC_TEST_CMD, BASIC_TEST_TIMEOUT, BASIC_TEST_EXPECTED_OUTPUT)
+            # Step 3: Run a testing script to check if the code works
+            step_start_time = time.time()
+            with Timer("Running test script..."):
+                run_output = run_command_with_timeout(TEST_CMD, TEST_TIMEOUT, TEST_EXPECTED_OUTPUT)
 
-            if BASIC_TEST_EXPECTED_OUTPUT in run_output:
-                self.logger.log_status("Basic test ✅")
+            if TEST_EXPECTED_OUTPUT in run_output:
+                self.logger.log_status("Test script ✅", time.time() - step_start_time)
             else:
-                self.logger.log_status("Basic test ❌")
-                self.logger.log_status(f"Expected output: {BASIC_TEST_EXPECTED_OUTPUT}")
+                self.logger.log_status("Test script ❌", time.time() - step_start_time)
+                self.logger.log_status(f"Expected output: {TEST_EXPECTED_OUTPUT}")
                 self.logger.log_status(f"Output: {run_output}")
-                with Timer("Analyzing basic test..."):
-                    analysis = generate_basic_test_analysis(
+                step_start_time = time.time()
+                with Timer("Analyzing test script..."):
+                    analysis = generate_test_analysis(
                         task_description,
                         current_code,
                         new_code,
-                        f"The excpected output was:\n{BASIC_TEST_EXPECTED_OUTPUT}\nThe output from running the program was:\n{run_output}",
+                        f"The excpected output was:\n{TEST_EXPECTED_OUTPUT}\nThe output from running the program was:\n{run_output}",
                     )
                     task_description = analysis
+                self.logger.log_status("Generated new prompt", time.time() - step_start_time)
+                self.logger.log_status(f"Attempt took {time.time() - attempt_start_time:.2f}s")
                 continue
 
             # Step 4: Compare lines of unsafe code
+            step_start_time = time.time()
             num_old_unsafe_lines, _ = count_unsafe(current_code)
             num_new_unsafe_lines, _ = count_unsafe(new_code)
             self.logger.log_status(
@@ -145,22 +150,24 @@ class Oxidizer:
                         num_old_unsafe_lines,
                         num_new_unsafe_lines,
                     )
+                self.logger.log_status("Analysis complete", time.time() - step_start_time)
                 if analysis.lower().startswith("good: "):
                     self.logger.log_status("Strategy can still be used. Trying with new prompt.")
                     task_description = analysis[6:]
+                    self.logger.log_status(f"Attempt took {time.time() - attempt_start_time:.2f}s")
                     continue
                 else:
                     self.logger.log_status(
-                        f"Strategy cannot be used to make code safer for the following reason: {analysis[5:]}"
+                        f"\nStrategy cannot be used to make code safer for the following reason: {analysis[5:]}", 
                     )
                     if num_old_unsafe_lines > num_new_unsafe_lines:
-                        return StrategyStatus.CODE_SAFETY_DETERIORATED, new_code
+                        return StrategyStatus.CODE_SAFETY_DETERIORATED, new_code, num_attempts, time.time() - strategy_start_time
                     else:
-                        return StrategyStatus.CODE_SAFETY_UNCHANGED, new_code
+                        return StrategyStatus.CODE_SAFETY_UNCHANGED, new_code, num_attempts, time.time() - strategy_start_time
             else:
                 self.logger.log_status("Code safety improved ✅")
                 self.current_unsafe_lines = num_new_unsafe_lines
-                return StrategyStatus.SUCCESS, new_code
+                return StrategyStatus.SUCCESS, new_code, num_attempts, time.time() - strategy_start_time
 
 
 if __name__ == "__main__":

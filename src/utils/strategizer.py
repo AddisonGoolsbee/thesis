@@ -44,34 +44,35 @@ Do not explain your reasoning. Just return the strategy.
     
     def get_failed_strategies(self):
         success_count = sum(1 for strategy in self.strategies if strategy.result == StrategyStatus.SUCCESS)
-        if success_count == 0:
+        if success_count == len(self.strategies):
             return ""
         text = f"\nOut of the {len(self.strategies)} strategies you have tried so far, the following ones did not make the code safer:\n"
         for strategy in self.strategies:
             match strategy.result:
                 case StrategyStatus.FAILED_TOO_LONG:
-                    text += f"For this strategy, you spent too long on without reaching a positive safety result: {strategy.prompt}\n"
+                    text += f"• This strategy took too long to generate a positive safety result, and thus timed out: {strategy.prompt}\n"
                 case StrategyStatus.CODE_SAFETY_DETERIORATED:
-                    text += f"This strategy made the code less safe: {strategy.prompt}\n"
+                    text += f"• This strategy made the code less safe: {strategy.prompt}\n"
                 case StrategyStatus.CODE_SAFETY_UNCHANGED:
-                    text += f"This strategy made no changes to the code safety: {strategy.prompt}\n"
+                    text += f"• This strategy made no changes to the code safety: {strategy.prompt}\n"
                 case _:
                     pass
-        return text + "\nDo not repeat these strategies unless you have a good reason to do so."
+        return text + "\nDo not repeat these strategies unless you have a good reason to do so.\n"
 
-    def add_strategy(self, strategy_prompt, result):
+    def add_strategy(self, strategy_prompt, result, attempts, time_taken, initial_unsafe_lines):
         strategy = Strategy(strategy_prompt, result)
         self.strategies.append(strategy)
+        
         log_message = ""
         match result:
             case StrategyStatus.SUCCESS:
-                log_message = "Successfully made the code safer."
+                log_message = "code safety improved"
             case StrategyStatus.CODE_SAFETY_DETERIORATED:
-                log_message = "Code safety deteriorated."
+                log_message = "code safety deteriorated"
             case StrategyStatus.CODE_SAFETY_UNCHANGED:
-                log_message = "Code safety unchanged."
+                log_message = "code safety unchanged"
             case StrategyStatus.FAILED_TOO_LONG:
-                log_message = "Failed to generate a strategy in time."
+                log_message = "failed to generate a successful implementation in time"
             case _:
-                log_message = "Unknown error."
-        self.logger.log_strategy_result(log_message)
+                log_message = "unknown error"
+        self.logger.log_strategy_result(f"Result: {log_message} in {attempts} attempt{'s' if attempts != 1 else ''} and {time_taken:.2f}s", initial_unsafe_lines)

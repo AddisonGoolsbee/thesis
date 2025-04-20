@@ -1,25 +1,18 @@
+import atexit
 import os
 import re
 import json
 import shutil
+import time
 
 from config import CODE_PATH
 
 
 class Logger:
-    _instance = None
-
-    def __new__(cls):
-        if cls._instance is None:
-            cls._instance = super(Logger, cls).__new__(cls)
-        return cls._instance
-
     def __init__(self):
-        if hasattr(self, "initialized"):
-            return
-        self.initialized = True
-
         self.initial_path = CODE_PATH
+        self.start_time = time.time()
+        self.best_unsafe_lines = None
         with open(self.initial_path, "r", encoding="utf-8") as f:
             self.initial_code = f.read()
 
@@ -51,33 +44,69 @@ class Logger:
         os.makedirs(self.run_dir)
         self.strategy_num = "000"
 
+        atexit.register(self.cleanup)
+
+    def cleanup(self):
+        with open(os.path.join(self.run_dir, "summary.log"), "a", encoding="utf-8") as f:
+            f.write(f"\nResult: {self.initial_unsafe_lines} unsafe lines -> {self.best_unsafe_lines if self.best_unsafe_lines else self.initial_unsafe_lines} unsafe lines in {int((time.time() - self.start_time) / 60)}:{int((time.time() - self.start_time) % 60):02d}\n")
+
+        shutil.copy(self.logger_original_path, self.initial_path)
+        print("Reverted code to original state.")
+        print("Logs saved to ", self.run_dir)
+        if os.path.exists(os.path.join(self.run_dir, "best.rs")):
+            print("Best code saved to ", os.path.join(self.run_dir, "best.rs"))
+
+    def begin_run(self, initial_unsafe_lines):
+        self.initial_unsafe_lines = initial_unsafe_lines
+        with open(os.path.join(self.run_dir, "summary.log"), "a", encoding="utf-8") as f:
+            f.write(f"Initial unsafe lines: {initial_unsafe_lines}\n")
+
     def log_strategy(self, prompt):
+        self.most_recent_prompt = prompt
         self.strategy_num = f"{(int(self.strategy_num) + 1):03d}"
-        self.strategy_path = os.path.join(self.run_dir, f"strategy{self.strategy_num}")
-        os.makedirs(self.strategy_path)
+        self.strategy_dir = os.path.join(self.run_dir, f"strategy{self.strategy_num}")
+        os.makedirs(self.strategy_dir)
         self.prompt_num = "000"
 
-    def log_strategy_result(self, result):
-        with open(os.path.join(self.strategy_path, "summary.log"), "a", encoding="utf-8") as f:
-            f.write(result + "\n")
+        with open(os.path.join(self.run_dir, "summary.log"), "a", encoding="utf-8") as f:
+            f.write(("\n" if int(self.strategy_num) > 1 else "") + f"Strategy {int(self.strategy_num)}: {prompt}\n")
+
+    def log_strategy_result(self, result, unsafe_lines):
+        self.best_unsafe_lines = unsafe_lines
+
+        with open(os.path.join(self.strategy_dir, "summary.log"), "a", encoding="utf-8") as f:
+            f.write(
+                f"\n{result}\n"
+            )
         print(result)
 
-    def log_prompt(self, prompt):
-        self.prompt_num = f"{(int(self.prompt_num) + 1):03d}"
-        with open(os.path.join(self.strategy_path, "summary.log"), "a", encoding="utf-8") as f:
-            f.write(f"Prompt {int(self.prompt_num)}\n{prompt}\n")
-        print(f"{"\n" if int(self.prompt_num) > 1 else ""}Prompt {int(self.prompt_num)}: {prompt}")
+        with open(os.path.join(self.run_dir, "summary.log"), "a", encoding="utf-8") as f:
+            f.write(
+                f"Final prompt: {self.most_recent_prompt}\n{result}\n{unsafe_lines} unsafe lines remaining\n"
+            )
 
-    def log_generated_code(self, replacements, new_code, attempt_num):
-        with open(os.path.join(self.strategy_path, f"replacements{self.prompt_num}.json"), "w") as f:
+    def log_prompt(self, prompt):
+        self.most_recent_prompt = prompt
+        self.prompt_num = f"{(int(self.prompt_num) + 1):03d}"
+        with open(os.path.join(self.strategy_dir, "summary.log"), "a", encoding="utf-8") as f:
+            f.write(("\n" if int(self.prompt_num) > 1 else "") + f"Prompt {int(self.prompt_num)}: {prompt}\n")
+        print(f"Prompt {int(self.prompt_num)}: {prompt}")
+
+    def log_generated_code(self, replacements, new_code, attempt_num, time_taken):
+        with open(os.path.join(self.strategy_dir, f"replacements{self.prompt_num}.json"), "w") as f:
             json.dump(json.loads(replacements), f, indent=4)
-        with open(os.path.join(self.strategy_path, f"code{self.prompt_num}.rs"), "w") as f:
+        with open(os.path.join(self.strategy_dir, f"code{self.prompt_num}.rs"), "w") as f:
             f.write(new_code)
 
-        with open(os.path.join(self.strategy_path, "summary.log"), "a", encoding="utf-8") as f:
-            f.write(f"Successful generation after {attempt_num} attempt(s)\n")
+        with open(os.path.join(self.strategy_dir, "summary.log"), "a", encoding="utf-8") as f:
+            f.write(f"Successful generation in {attempt_num} attempt{'s' if attempt_num != 1 else ''} ({time_taken:.2f}s)\n")
 
-    def log_status(self, status):
-        with open(os.path.join(self.strategy_path, "summary.log"), "a", encoding="utf-8") as f:
-            f.write(status + "\n")
-        print(status)
+    def log_status(self, status, time_taken=None):
+        with open(os.path.join(self.strategy_dir, "summary.log"), "a", encoding="utf-8") as f:
+            f.write(status + (f" ({time_taken:.2f}s)" if time_taken else "") + "\n")
+        print(status + (f" ({time_taken:.2f}s)" if time_taken else ""))
+
+    def update_best_code(self, new_code):
+        with open(os.path.join(self.run_dir, "best.rs"), "w", encoding="utf-8") as f:
+            f.write(new_code)
+        print("Updated best code")

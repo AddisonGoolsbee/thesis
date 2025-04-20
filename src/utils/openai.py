@@ -72,6 +72,7 @@ Only return the list of replacements, do not add comments or labels
     new_code = apply_changes(current_code, result)
     return new_code, result
 
+
 def generate_code_generation_failure_analysis(task_description, current_code, num_attempts):
     prompt = f"""
 You are a software engineering assistant. You were given some code and a task description on how to modify it.
@@ -112,7 +113,7 @@ If you think yes, return "good" and your explanation.
     return call_openai_api(prompt)
 
 
-def generate_basic_test_analysis(task_description, original_code, new_code, run_output):
+def generate_test_analysis(task_description, original_code, new_code, run_output):
 
     prompt = f"""
 You are a software engineering assistant. You were given some code and a task description on how to modify it.
