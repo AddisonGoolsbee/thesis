@@ -10,109 +10,113 @@ from utils.openai import (
 from utils.io import Timer, run_command_with_timeout
 from utils.logger import Logger
 from utils.misc import count_unsafe
+from utils.strategizer import Strategizer
 from config import *
 
 
 def main():
-    task_description = "Modify the code so that partition and quickSort use &mut [i32] slices instead of raw pointers, while preserving the #[no_mangle] pub unsafe extern \"C\" interface for FFI compatibility."
+    MAX_RETRIES = 5
 
     with open(CODE_PATH, "r", encoding="utf-8") as f:
         current_code = f.read()
         new_code = current_code
 
     logger = Logger()
-
-    logger.begin_strategy(task_description)
-    MAX_RETRIES = 5
-
+    strategizer = Strategizer()
+    
     # Main loop:
     while True:
-        logger.log_prompt(task_description)
+        task_description = strategizer.generate_strategy(current_code)
+        logger.begin_strategy(task_description)
 
-        # Step 1: Generate new code via patch file
-        with Timer("Generating..."):
-            for attempt in range(1, MAX_RETRIES + 1):
-                try:
-                    new_code, replacements = generate_code(task_description, current_code)
-                    logger.log_generated_code(replacements, new_code, attempt)
-                    break
-                except Exception as e:
-                    print(f"\nError: {e} (Attempt {attempt}/{MAX_RETRIES})")
-                    if attempt == MAX_RETRIES:
-                        logger.log_status("Max code generation retries reached. Aborting.")
-                        exit(1)
+        # Individual strategy loop:
+        while True:
+            logger.log_prompt(task_description)
 
-        with open(CODE_PATH, "w", encoding="utf-8") as f:
-            f.write(new_code)
+            # Step 1: Generate new code via patch file
+            with Timer("Generating..."):
+                for attempt in range(1, MAX_RETRIES + 1):
+                    try:
+                        new_code, replacements = generate_code(task_description, current_code)
+                        logger.log_generated_code(replacements, new_code, attempt)
+                        break
+                    except Exception as e:
+                        print(f"\nError: {e} (Attempt {attempt}/{MAX_RETRIES})")
+                        if attempt == MAX_RETRIES:
+                            logger.log_status("Max code generation retries reached. Aborting.")
+                            exit(1)
 
-        # Step 2: Compilation
-        with Timer("Building..."):
-            process = subprocess.run(BUILD_CMD, shell=True, capture_output=True, text=True)
-        build_output = f"[Return code: {process.returncode}]\n {process.stderr}"
+            with open(CODE_PATH, "w", encoding="utf-8") as f:
+                f.write(new_code)
 
-        with Timer("Analyzing compilation..."):
-            analysis = generate_build_analysis(task_description, new_code, build_output)
+            # Step 2: Compilation
+            with Timer("Building..."):
+                process = subprocess.run(BUILD_CMD, shell=True, capture_output=True, text=True)
+            build_output = f"[Return code: {process.returncode}]\n {process.stderr}"
 
-        if analysis.lower().startswith("good"):
-            logger.log_status("Compilation ✅")
-        elif analysis.lower().startswith("bad: "):
-            logger.log_status("Compilation ❌")
-            task_description = analysis[5:]
-            continue
-        elif analysis.lower().startswith("stop: "):
-            logger.log_status("Compilation ❌ (build command error)")
-            logger.log_status(f"Build command error: {analysis[6:]}")
-        else:
-            logger.log_status("Analysis unsuccessful, retrying...")
-            continue
+            with Timer("Analyzing compilation..."):
+                analysis = generate_build_analysis(task_description, new_code, build_output)
 
-        # Step 3: Run the program with a basic unit test
-        with Timer("Running basic test..."):
-            run_output = run_command_with_timeout(BASIC_TEST_CMD, BASIC_TEST_TIMEOUT, BASIC_TEST_EXPECTED_OUTPUT)
-            print(run_output)
-
-        if BASIC_TEST_EXPECTED_OUTPUT in run_output:
-            logger.log_status("Basic test ✅")
-        else:
-            logger.log_status("Basic test ❌")
-            logger.log_status(f"Expected output: {BASIC_TEST_EXPECTED_OUTPUT}")
-            logger.log_status(f"Output: {run_output}")
-            with Timer("Analyzing basic test..."):
-                analysis = generate_basic_test_analysis(
-                    task_description,
-                    current_code,
-                    new_code,
-                    f"The excpected output was:\n{BASIC_TEST_EXPECTED_OUTPUT}\nThe output from running the program was:\n{run_output}",
-                )
-            continue
-
-        # Step 4: Compare lines of unsafe code
-        num_old_unsafe_lines, _ = count_unsafe(current_code)
-        num_new_unsafe_lines, _ = count_unsafe(new_code)
-        logger.log_status(f"Result: {num_old_unsafe_lines} unsafe lines -> {num_new_unsafe_lines} unsafe lines")
-        if num_old_unsafe_lines <= num_new_unsafe_lines:
-            logger.log_status("Code safety improved ❌")
-            with Timer("Analyzing why new code is not safer..."):
-                analysis = generate_code_safety_analysis(
-                    task_description,
-                    current_code,
-                    new_code,
-                    num_old_unsafe_lines,
-                    num_new_unsafe_lines,
-                )
-            if analysis.lower().startswith("good: "):
-                logger.log_status("Strategy can still be used. Trying with new prompt.")
-                task_description = analysis[6:]
-                continue
+            if analysis.lower().startswith("good"):
+                logger.log_status("Compilation ✅")
             elif analysis.lower().startswith("bad: "):
-                logger.log_status(
-                    f"Strategy cannot be used to make code safer for the following reason: {analysis[5:]}"
-                )
-        else:
-            logger.log_status("Code safety improved ✅")
+                logger.log_status("Compilation ❌")
+                task_description = analysis[5:]
+                continue
+            elif analysis.lower().startswith("stop: "):
+                logger.log_status("Compilation ❌ (build command error)")
+                logger.log_status(f"Build command error: {analysis[6:]}")
+            else:
+                logger.log_status("Analysis unsuccessful, retrying...")
+                continue
 
-        print("Reached the end of the loop")
-        break
+            # Step 3: Run the program with a basic unit test
+            with Timer("Running basic test..."):
+                run_output = run_command_with_timeout(BASIC_TEST_CMD, BASIC_TEST_TIMEOUT, BASIC_TEST_EXPECTED_OUTPUT)
+                print(run_output)
+
+            if BASIC_TEST_EXPECTED_OUTPUT in run_output:
+                logger.log_status("Basic test ✅")
+            else:
+                logger.log_status("Basic test ❌")
+                logger.log_status(f"Expected output: {BASIC_TEST_EXPECTED_OUTPUT}")
+                logger.log_status(f"Output: {run_output}")
+                with Timer("Analyzing basic test..."):
+                    analysis = generate_basic_test_analysis(
+                        task_description,
+                        current_code,
+                        new_code,
+                        f"The excpected output was:\n{BASIC_TEST_EXPECTED_OUTPUT}\nThe output from running the program was:\n{run_output}",
+                    )
+                continue
+
+            # Step 4: Compare lines of unsafe code
+            num_old_unsafe_lines, _ = count_unsafe(current_code)
+            num_new_unsafe_lines, _ = count_unsafe(new_code)
+            logger.log_status(f"Result: {num_old_unsafe_lines} unsafe lines -> {num_new_unsafe_lines} unsafe lines")
+            if num_old_unsafe_lines <= num_new_unsafe_lines:
+                logger.log_status("Code safety improved ❌")
+                with Timer("Analyzing why new code is not safer..."):
+                    analysis = generate_code_safety_analysis(
+                        task_description,
+                        current_code,
+                        new_code,
+                        num_old_unsafe_lines,
+                        num_new_unsafe_lines,
+                    )
+                if analysis.lower().startswith("good: "):
+                    logger.log_status("Strategy can still be used. Trying with new prompt.")
+                    task_description = analysis[6:]
+                    continue
+                elif analysis.lower().startswith("bad: "):
+                    logger.log_status(
+                        f"Strategy cannot be used to make code safer for the following reason: {analysis[5:]}"
+                    )
+            else:
+                logger.log_status("Code safety improved ✅")
+
+            print("Reached the end of the loop")
+            break
 
 
 if __name__ == "__main__":
