@@ -87,7 +87,7 @@ class Oxidizer:
                 break_loop = False
                 for generation_attempt in range(1, self.MAX_GENERATION_RETRIES + 1):
                     try:
-                        replacements, new_code, new_toml = generate_code(task_description, current_code, current_toml)
+                        replacements, new_code, new_toml = generate_code(task_description, current_code, current_toml, generation_attempt, self.logger)
                         self.logger.log_generated_code(
                             replacements, new_code, new_toml, generation_attempt, time.time() - step_start_time
                         )

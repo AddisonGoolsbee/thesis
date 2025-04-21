@@ -58,7 +58,7 @@ def get_task_modification_requirements(original_task_description):
         requirements += "\n- You are only modifying the code, so don't try anything that would require adding new packages. You can't edit the Cargo.toml file."
     return requirements
 
-def generate_code(task_description, current_code, current_toml):
+def generate_code(task_description, current_code, current_toml, generation_attempt, logger):
     cargo_pre_instructions = {"\nHere is the Cargo.toml file:\n" + current_toml if current_toml else ""}
     cargo_format_instructions = """    ],
     "cargo_replacements": [
@@ -107,6 +107,7 @@ Ensure:
 Only return the list of replacements, do not add comments or labels
 """
     result = call_openai_api_for_patch(prompt)
+    logger.log_generation_attempt(result, generation_attempt)
     result_json = json.loads(result)
     new_code = apply_changes(current_code, result_json["replacements"])
     if CARGO_PATH:

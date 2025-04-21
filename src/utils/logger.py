@@ -127,6 +127,14 @@ class Logger:
             log_message = f"Successful generation in {attempt_num} attempt{'s' if attempt_num != 1 else ''} ({time_taken:.2f}s)"
             f.write(log_message + "\n")
             self.log_verbose(log_message)
+    
+    def log_generation_attempt(self, result, generation_attempt):
+        generation_attempts_dir = os.path.join(self.strategy_dir, "generation_attempts")
+        if not os.path.exists(generation_attempts_dir):
+            os.makedirs(generation_attempts_dir)
+
+        with open(os.path.join(generation_attempts_dir, f"{self.prompt_num}-{generation_attempt}.json"), "w") as f:
+            json.dump(json.loads(result), f, indent=4)
 
     def log_status(self, status, time_taken=None):
         log_message = status + (f" ({time_taken:.2f}s)" if time_taken else "")
