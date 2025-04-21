@@ -123,3 +123,8 @@ class Logger:
         with open(os.path.join(self.run_dir, "best.rs"), "w", encoding="utf-8") as f:
             f.write(new_code)
         print("Updated best code")
+
+    def log_to_run(self, message):
+        with open(os.path.join(self.run_dir, "summary.log"), "a", encoding="utf-8") as f:
+            f.write(message + "\n")
+        print(message)

@@ -8,6 +8,7 @@ if TARGET == "theseus":
     TEST_TIMEOUT = 15
 elif TARGET == "rfk":
     CODE_PATH = "src/examples/rfk/src/main.rs"
+    CARGO_PATH = "src/examples/rfk/Cargo.toml"
     BUILD_CMD = "cargo +nightly test --manifest-path src/examples/rfk/Cargo.toml --test test --no-run"
     TEST_CMD = "cargo +nightly test --manifest-path src/examples/rfk/Cargo.toml --test test"
     TEST_EXPECTED_OUTPUT = "test result: ok. 3 passed;"

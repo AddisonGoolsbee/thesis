@@ -22,26 +22,36 @@ class Oxidizer:
         self.logger = Logger()
         self.strategizer = Strategizer(self.logger)
         self.best_code = None
-
+        self.best_toml = None
+        
     def run(self):
         with open(CODE_PATH, "r", encoding="utf-8") as f:
             current_code = f.read()
             self.current_unsafe_lines, _ = count_unsafe(current_code)
             self.best_code = current_code
+        
+        if CARGO_PATH:
+            with open(CARGO_PATH, "r", encoding="utf-8") as f:
+                cargo_toml = f.read()
+                self.best_toml = cargo_toml
+                self.logger.log_to_run(f"Using Cargo.toml at {CARGO_PATH}")
 
         self.logger.begin_run(self.current_unsafe_lines)
 
         # Main loop:
         while True:
             with Timer("Generating new strategy..."):
+                # here
                 strategy_prompt = self.strategizer.generate_strategy(self.best_code)
 
-            result, new_code, attempts, time_taken, ending_prompt = self.run_strategy(strategy_prompt, self.best_code)
+            result, new_code, new_toml, attempts, time_taken, ending_prompt = self.run_strategy(strategy_prompt, self.best_code, self.best_toml)
             self.strategizer.add_strategy(ending_prompt, result, attempts, time_taken, self.current_unsafe_lines)
 
             if result == StrategyStatus.SUCCESS:
                 self.best_code = new_code
-                self.logger.update_best_code(new_code)
+                self.best_toml = new_toml
+                # here
+                self.logger.update_best_code(new_code, new_toml)
 
             if self.current_unsafe_lines == 0:
                 self.logger.log_status("No unsafe lines remaining. Exiting.")
@@ -51,7 +61,7 @@ class Oxidizer:
                 self.logger.log_status("Encountered 10 consecutive failed strategies. Exiting due to lack of progress.")
                 break
 
-    def run_strategy(self, strategy_prompt, current_code):
+    def run_strategy(self, strategy_prompt, current_code, current_toml):
         task_description = strategy_prompt
         num_attempts = 0
         strategy_start_time = time.time()
@@ -64,6 +74,7 @@ class Oxidizer:
                 return (
                     StrategyStatus.FAILED_TOO_LONG,
                     current_code,
+                    current_toml,
                     self.MAX_PROMPTS,
                     time.time() - strategy_start_time,
                     task_description,
@@ -75,7 +86,7 @@ class Oxidizer:
                 break_loop = False
                 for generation_attempt in range(1, self.MAX_GENERATION_RETRIES + 1):
                     try:
-                        new_code, replacements = generate_code(task_description, current_code)
+                        new_code, new_toml, replacements = generate_code(task_description, current_code, current_toml)
                         self.logger.log_generated_code(
                             replacements, new_code, generation_attempt, time.time() - step_start_time
                         )
@@ -189,6 +200,7 @@ class Oxidizer:
                         return (
                             StrategyStatus.CODE_SAFETY_DETERIORATED,
                             new_code,
+                            new_toml,
                             num_attempts,
                             time.time() - strategy_start_time,
                             task_description,
@@ -197,6 +209,7 @@ class Oxidizer:
                         return (
                             StrategyStatus.CODE_SAFETY_UNCHANGED,
                             new_code,
+                            new_toml,
                             num_attempts,
                             time.time() - strategy_start_time,
                             task_description,
@@ -207,6 +220,7 @@ class Oxidizer:
                 return (
                     StrategyStatus.SUCCESS,
                     new_code,
+                    new_toml,
                     num_attempts,
                     time.time() - strategy_start_time,
                     task_description,

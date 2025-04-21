@@ -4,6 +4,7 @@ import os
 from pydantic import BaseModel
 
 from utils.misc import apply_changes
+from config import CARGO_PATH
 
 load_dotenv()
 openai.api_key = os.getenv("OPENAI_API_KEY")
@@ -30,6 +31,10 @@ class Replacement(BaseModel):
 class ReplacementList(BaseModel):
     replacements: list[Replacement]
 
+class ReplacementListWithCargo(BaseModel):
+    replacements: list[Replacement]
+    cargo_replacements: list[Replacement]
+
 
 def call_openai_api_for_patch(prompt):
     completion = client.beta.chat.completions.parse(
@@ -37,7 +42,7 @@ def call_openai_api_for_patch(prompt):
         messages=[
             {"role": "user", "content": prompt},
         ],
-        response_format=ReplacementList,
+        response_format=(ReplacementListWithCargo if CARGO_PATH else ReplacementList),
     )
 
     return completion.choices[0].message.content
@@ -47,15 +52,17 @@ def get_task_modification_requirements(original_task_description):
 - You must preserve the core strategy of the original task description: <{original_task_description}>, with the ultimate goal of modifying the code to reduce the number of unsafe lines
 - This new task description should work where the current one (and the original one) did not
 - Try to keep the new task description as isolated as possible, so it only affects the code in a few specific areas (if possible)
-- Do not explain any reasoning. Just return the new task description.
-"""
+- Do not explain any reasoning. Just return the new task description."""
+    if not CARGO_PATH:
+        requirements += "\n- You are only modifying the code, so don't try anything that would require adding new packages. You can't edit the Cargo.toml file."
     return requirements
 
-def generate_code(task_description, current_code):
+def generate_code(task_description, current_code, current_toml):
 
     prompt = f"""
 You are a software engineering assistant. You are given some code and a task description on how to modify it.
 {current_code}
+{"\nHere is the Cargo.toml file:\n" + current_toml if current_toml else ""}
 
 Here is the task description:
 {task_description}

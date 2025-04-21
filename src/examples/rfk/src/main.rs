@@ -8,8 +8,6 @@
     unused_mut
 )]
 #![feature(extern_types)]
-extern crate core;
-extern crate libc;
 extern "C" {
     pub type ldat;
     fn cbreak() -> libc::c_int;
