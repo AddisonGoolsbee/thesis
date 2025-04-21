@@ -44,10 +44,10 @@ class Oxidizer:
             with Timer("Generating new strategy..."):
                 strategy_prompt = self.strategizer.generate_strategy(self.best_code, self.best_toml)
 
-            result, new_code, new_toml, attempts, time_taken, ending_prompt = self.run_strategy(
+            result, new_code, new_toml, attempts, time_taken = self.run_strategy(
                 strategy_prompt, self.best_code, self.best_toml
             )
-            self.strategizer.add_strategy(ending_prompt, result, attempts, time_taken, self.current_unsafe_lines)
+            self.strategizer.add_strategy(strategy_prompt, result, attempts, time_taken, self.current_unsafe_lines)
 
             if result == StrategyStatus.SUCCESS:
                 self.best_code = new_code
@@ -78,7 +78,6 @@ class Oxidizer:
                     current_toml,
                     self.MAX_PROMPTS,
                     time.time() - strategy_start_time,
-                    task_description,
                 )
 
             # Step 1: Generate new code via patch file
@@ -173,7 +172,7 @@ class Oxidizer:
 
             # Step 4: Compare lines of unsafe code
             step_start_time = time.time()
-            num_old_unsafe_lines, _ = count_unsafe(current_code)
+            num_old_unsafe_lines = self.current_unsafe_lines
             num_new_unsafe_lines, _ = count_unsafe(new_code)
             self.logger.log_status(
                 f"Result: {num_old_unsafe_lines} unsafe lines -> {num_new_unsafe_lines} unsafe lines"
@@ -206,7 +205,6 @@ class Oxidizer:
                             new_toml,
                             num_attempts,
                             time.time() - strategy_start_time,
-                            task_description,
                         )
                     else:
                         return (
@@ -215,7 +213,6 @@ class Oxidizer:
                             new_toml,
                             num_attempts,
                             time.time() - strategy_start_time,
-                            task_description,
                         )
             else:
                 self.logger.log_status("Code safety improved ✅")
@@ -226,7 +223,6 @@ class Oxidizer:
                     new_toml,
                     num_attempts,
                     time.time() - strategy_start_time,
-                    task_description,
                 )
 
 

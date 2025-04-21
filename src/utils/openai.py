@@ -53,6 +53,7 @@ def get_task_modification_requirements(original_task_description):
 - You must preserve the core strategy of the original task description: <{original_task_description}>, with the ultimate goal of modifying the code to reduce the number of unsafe lines
 - This new task description should work where the current one (and the original one) did not
 - Try to keep the new task description as isolated as possible, so it only affects the code in a few specific areas (if possible)
+- Include specific details about what to change, especially to avoid making the same problem you just made.
 - Do not explain any reasoning. Just return the new task description."""
     if not CARGO_PATH:
         requirements += "\n- You are only modifying the code, so don't try anything that would require adding new packages. You can't edit the Cargo.toml file."

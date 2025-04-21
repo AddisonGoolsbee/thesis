@@ -50,6 +50,7 @@ Make sure the strategy makes the code SAFER, not just more idiomatic/cleaner/fas
 Do not explain your reasoning. Just return the strategy.
 """
         strategy = call_openai_api(prompt)
+        # strategy = "Modify the process_input function such that its unsafe components are isolated in multiple blocks to minimize the number of unsafe lines. Remeber to remove the unsafe keyword from the function."
         self.logger.log_strategy(strategy)
         return strategy
     
