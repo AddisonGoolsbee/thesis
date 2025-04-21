@@ -1,4 +1,4 @@
-TARGET = "quicksort"
+TARGET = "rfk"
 
 if TARGET == "theseus":
     CODE_PATH = "/Users/addisongoolsbee/Desktop/Theseus/kernel/e1000/src/lib.rs"

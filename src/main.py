@@ -72,6 +72,7 @@ class Oxidizer:
             # Step 1: Generate new code via patch file
             step_start_time = time.time()
             with Timer("Generating code..."):
+                break_loop = False
                 for generation_attempt in range(1, self.MAX_GENERATION_RETRIES + 1):
                     try:
                         new_code, replacements = generate_code(task_description, current_code)
@@ -89,8 +90,15 @@ class Oxidizer:
                                 task_description,
                                 current_code,
                                 self.MAX_GENERATION_RETRIES,
+                                strategy_prompt,
                             )
                             task_description = analysis
+                            self.logger.log_status(f"Attempt took {time.time() - attempt_start_time:.2f}s")
+                            break_loop = True
+                            break
+
+                if break_loop:
+                    continue
 
             with open(CODE_PATH, "w", encoding="utf-8") as f:
                 f.write(new_code)
@@ -106,7 +114,7 @@ class Oxidizer:
                 self.logger.log_status("Compilation ✅", time.time() - step_start_time)
             else:
                 with Timer("Analyzing compilation..."):
-                    analysis = generate_build_analysis(task_description, new_code, build_output, strategy_prompt)
+                    analysis = generate_build_analysis(task_description, new_code, build_output, strategy_prompt, current_code)
 
                 if analysis.lower().startswith("good"):
                     self.logger.log_status("Compilation ✅", time.time() - step_start_time)

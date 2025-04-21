@@ -23,8 +23,9 @@ class Strategizer:
         self.strategies: list[Strategy] = []
 
     def generate_strategy(self, current_code):
-        if len(self.strategies) > 0:
-            print("Failed strategies: ", self.get_failed_strategies())
+        success_count = sum(1 for strategy in self.strategies if strategy.result == StrategyStatus.SUCCESS)
+        if success_count != len(self.strategies):
+            print("\n", self.get_failed_strategies())
 
         prompt = f"""
 You are a software engineering assistant. Your goal is to make a rust file safer, as defined by the number of unsafe lines in the code.
