@@ -104,9 +104,7 @@ def count_unsafe(rust_code: str, debug: bool = False) -> tuple[int, int]:
     return num_unsafe_lines, num_unsafe_blocks
 
 
-def apply_changes(current_code: str, changes: str) -> str:
-    changes = json.loads(changes)
-
+def apply_changes(current_code: str, changes: list) -> str:
     def normalize_whitespace(code: str) -> str:
         # Remove all whitespace including newlines
         return "".join(code.split())
@@ -146,7 +144,7 @@ def apply_changes(current_code: str, changes: str) -> str:
 
         return orig_start, orig_end
 
-    for replacement in changes["replacements"]:
+    for replacement in changes:
         start_pos, end_pos = find_normalized_substring(current_code, replacement["original"])
 
         if start_pos == -1:

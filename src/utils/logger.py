@@ -5,25 +5,34 @@ import json
 import shutil
 import time
 
-from config import CODE_PATH
+from config import CODE_PATH, CARGO_PATH
 
 
 class Logger:
     def __init__(self):
         self.initial_path = CODE_PATH
+        self.initial_toml_path = CARGO_PATH
         self.start_time = time.time()
         self.best_unsafe_lines = None
         with open(self.initial_path, "r", encoding="utf-8") as f:
             self.initial_code = f.read()
+        if CARGO_PATH:
+            with open(self.initial_toml_path, "r", encoding="utf-8") as f:
+                self.initial_toml = f.read()
+        else:
+            self.initial_toml = None
 
         self.logger_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "log"))
         self.logger_original_path = os.path.join(self.logger_path, "original.rs")
+        self.logger_original_toml_path = os.path.join(self.logger_path, "original.toml")
 
         create_log = False
         if os.path.exists(self.logger_path):
             if (
                 not os.path.exists(self.logger_original_path)
                 or open(self.logger_original_path, "r", encoding="utf-8").read() != self.initial_code
+                or (CARGO_PATH and (not os.path.exists(self.logger_original_toml_path)
+                or open(self.logger_original_toml_path, "r", encoding="utf-8").read() != self.initial_toml))
             ):
                 print("log/original.rs has changed, removing old log folder")
                 shutil.rmtree(self.logger_path)
@@ -37,6 +46,9 @@ class Logger:
             os.makedirs(self.logger_path)
             with open(self.logger_original_path, "w", encoding="utf-8") as f:
                 f.write(self.initial_code)
+            if CARGO_PATH:
+                with open(self.logger_original_toml_path, "w", encoding="utf-8") as f:
+                    f.write(self.initial_toml)
 
         run_dirs = [d for d in os.listdir(self.logger_path) if re.fullmatch(r"run\d{3}", d)]
         next_run = f"{(max(map(lambda d: int(d[3:]), run_dirs), default=0) + 1):03d}"
@@ -52,10 +64,16 @@ class Logger:
             f.write(f"\nResult: {self.initial_unsafe_lines} unsafe lines -> {self.best_unsafe_lines if self.best_unsafe_lines else self.initial_unsafe_lines} unsafe lines in {int((time.time() - self.start_time) / 60)}:{int((time.time() - self.start_time) % 60):02d}\n")
 
         shutil.copy(self.logger_original_path, self.initial_path)
+        if CARGO_PATH:
+            shutil.copy(self.logger_original_toml_path, self.initial_toml_path)
+            print("Reverted Cargo.toml to original state.")
         print("Reverted code to original state.")
         print("Logs saved to ", self.run_dir)
         if os.path.exists(os.path.join(self.run_dir, "best.rs")):
             print("Best generated code saved to ", os.path.join(self.run_dir, "best.rs"))
+        if CARGO_PATH:
+            if os.path.exists(os.path.join(self.run_dir, "best.toml")):
+                print("Best generated Cargo.toml saved to ", os.path.join(self.run_dir, "best.toml"))
 
     def begin_run(self, initial_unsafe_lines):
         self.initial_unsafe_lines = initial_unsafe_lines
@@ -96,11 +114,14 @@ class Logger:
         print(log_message)
         self.log_verbose(log_message)
 
-    def log_generated_code(self, replacements, new_code, attempt_num, time_taken):
+    def log_generated_code(self, replacements, new_code, new_toml, attempt_num, time_taken):
         with open(os.path.join(self.strategy_dir, f"replacements{self.prompt_num}.json"), "w") as f:
             json.dump(json.loads(replacements), f, indent=4)
         with open(os.path.join(self.strategy_dir, f"code{self.prompt_num}.rs"), "w") as f:
             f.write(new_code)
+        if CARGO_PATH:
+            with open(os.path.join(self.strategy_dir, f"toml{self.prompt_num}.toml"), "w") as f:
+                f.write(new_toml)
 
         with open(os.path.join(self.strategy_dir, "summary.log"), "a", encoding="utf-8") as f:
             log_message = f"Successful generation in {attempt_num} attempt{'s' if attempt_num != 1 else ''} ({time_taken:.2f}s)"
@@ -119,12 +140,14 @@ class Logger:
         with open(os.path.join(self.strategy_dir, "verbose_summary.log"), "a", encoding="utf-8") as f:
             f.write(status + "\n")
 
-    def update_best_code(self, new_code):
+    def update_best_code(self, new_code, new_toml):
         with open(os.path.join(self.run_dir, "best.rs"), "w", encoding="utf-8") as f:
             f.write(new_code)
+        if CARGO_PATH:
+            with open(os.path.join(self.run_dir, "best.toml"), "w", encoding="utf-8") as f:
+                f.write(new_toml)
         print("Updated best code")
 
     def log_to_run(self, message):
         with open(os.path.join(self.run_dir, "summary.log"), "a", encoding="utf-8") as f:
             f.write(message + "\n")
-        print(message)

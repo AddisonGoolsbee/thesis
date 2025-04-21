@@ -1261,12 +1261,8 @@ pub unsafe extern "C" fn initialize_ncurses() {
 }
 #[no_mangle]
 pub unsafe extern "C" fn initialize_robot() {
-    // robot.x = rand() % (COLS - 1 as libc::c_int) + 1 as libc::c_int;
-    // robot
-    //     .y = rand() % (LINES - 1 as libc::c_int - 3 as libc::c_int + 1 as libc::c_int)
-    //     + 3 as libc::c_int;
     robot.x = COLS / 2;
-    robot.y = (3 + LINES - 1) / 2; // center between rows 3 and LINES-1
+    robot.y = (3 + LINES - 1) / 2;
 
     robot.character = '#' as i32 as libc::c_char;
     robot.color = 0 as libc::c_int;

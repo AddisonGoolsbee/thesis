@@ -1,5 +1,6 @@
 import subprocess
 import time
+import traceback
 from utils.openai import (
     generate_test_analysis,
     generate_code,
@@ -16,20 +17,20 @@ from config import *
 
 class Oxidizer:
     MAX_GENERATION_RETRIES = 5
-    MAX_PROMPTS = 10
+    MAX_PROMPTS = 6
 
     def __init__(self):
         self.logger = Logger()
         self.strategizer = Strategizer(self.logger)
         self.best_code = None
         self.best_toml = None
-        
+
     def run(self):
         with open(CODE_PATH, "r", encoding="utf-8") as f:
             current_code = f.read()
             self.current_unsafe_lines, _ = count_unsafe(current_code)
             self.best_code = current_code
-        
+
         if CARGO_PATH:
             with open(CARGO_PATH, "r", encoding="utf-8") as f:
                 cargo_toml = f.read()
@@ -41,16 +42,16 @@ class Oxidizer:
         # Main loop:
         while True:
             with Timer("Generating new strategy..."):
-                # here
-                strategy_prompt = self.strategizer.generate_strategy(self.best_code)
+                strategy_prompt = self.strategizer.generate_strategy(self.best_code, self.best_toml)
 
-            result, new_code, new_toml, attempts, time_taken, ending_prompt = self.run_strategy(strategy_prompt, self.best_code, self.best_toml)
+            result, new_code, new_toml, attempts, time_taken, ending_prompt = self.run_strategy(
+                strategy_prompt, self.best_code, self.best_toml
+            )
             self.strategizer.add_strategy(ending_prompt, result, attempts, time_taken, self.current_unsafe_lines)
 
             if result == StrategyStatus.SUCCESS:
                 self.best_code = new_code
                 self.best_toml = new_toml
-                # here
                 self.logger.update_best_code(new_code, new_toml)
 
             if self.current_unsafe_lines == 0:
@@ -86,9 +87,9 @@ class Oxidizer:
                 break_loop = False
                 for generation_attempt in range(1, self.MAX_GENERATION_RETRIES + 1):
                     try:
-                        new_code, new_toml, replacements = generate_code(task_description, current_code, current_toml)
+                        replacements, new_code, new_toml = generate_code(task_description, current_code, current_toml)
                         self.logger.log_generated_code(
-                            replacements, new_code, generation_attempt, time.time() - step_start_time
+                            replacements, new_code, new_toml, generation_attempt, time.time() - step_start_time
                         )
                         break
                     except Exception as e:
@@ -125,7 +126,9 @@ class Oxidizer:
                 self.logger.log_status("Compilation ✅", time.time() - step_start_time)
             else:
                 with Timer("Analyzing compilation..."):
-                    analysis = generate_build_analysis(task_description, new_code, build_output, strategy_prompt, current_code)
+                    analysis = generate_build_analysis(
+                        task_description, new_code, build_output, strategy_prompt, current_code
+                    )
 
                 if analysis.lower().startswith("good"):
                     self.logger.log_status("Compilation ✅", time.time() - step_start_time)
@@ -235,4 +238,4 @@ if __name__ == "__main__":
         print("\nExiting program via keyboard interrupt.")
     except Exception as e:
         print("\nProgram crashed with exception:")
-        print(e)
+        traceback.print_exc()

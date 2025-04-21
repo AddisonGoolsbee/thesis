@@ -22,19 +22,29 @@ class Strategizer:
         self.logger = logger
         self.strategies: list[Strategy] = []
 
-    def generate_strategy(self, current_code):
+    def generate_strategy(self, current_code, current_toml):
         success_count = sum(1 for strategy in self.strategies if strategy.result == StrategyStatus.SUCCESS)
         if success_count != len(self.strategies):
             print("\n", self.get_failed_strategies())
+        
+        if current_toml:
+            toml_message = f"Here is the current Cargo.toml file:\n{current_toml}"
+        else:
+            toml_message = ""
 
         prompt = f"""
 You are a software engineering assistant. Your goal is to make a rust file safer, as defined by the number of unsafe lines in the code.
 
 Here is the current code:
 {current_code}
+
+{toml_message}
+
 {self.get_failed_strategies()}
+
 Based on the current code, generate a description of a modification strategy that would make the code safer.
 The strategy should be 1-2 sentences, and should only change an isolated amount of the code, instead of making sweeping changes.
+{"You may not change the Cargo.toml file, so don't try to add any dependencies." if not current_toml else ""}
 The strategy should be a single isolated strategy, such as "change this struct to use generic types to isolate the unsafe code (and its uses)" or "change this function to use the rust standard library instead of a c library (and everything that calls it)". 
 Make sure the strategy makes the code SAFER, not just more idiomatic/cleaner/faster. Make sure you include removing the "unsafe" keyword if it will no longer be needed.
 Do not explain your reasoning. Just return the strategy.

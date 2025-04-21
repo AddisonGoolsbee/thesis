@@ -1,3 +1,4 @@
+import json
 from dotenv import load_dotenv
 import openai
 import os
@@ -58,16 +59,25 @@ def get_task_modification_requirements(original_task_description):
     return requirements
 
 def generate_code(task_description, current_code, current_toml):
+    cargo_pre_instructions = {"\nHere is the Cargo.toml file:\n" + current_toml if current_toml else ""}
+    cargo_format_instructions = """    ],
+    "cargo_replacements": [
+        {{
+            "original": "[dependencies]\nserde = \"1.0\"\nanyhow = \"1.0\"",
+            "new": "[dependencies]\nserde = \"1.0\"\nanyhow = \"1.0\"\nregex = \"1.10\""
+        }}
+    ]"""
 
     prompt = f"""
 You are a software engineering assistant. You are given some code and a task description on how to modify it.
 {current_code}
-{"\nHere is the Cargo.toml file:\n" + current_toml if current_toml else ""}
+
 
 Here is the task description:
 {task_description}
 
 Instead of providing new code, provide a json object that represent replacements made to the code. "original" is the original string (must be long enough to be unique in the code), and "new" is the new string which replaces the original.
+{"All code replacements must be in the 'replacements' list, while any changes to the Cargo.toml file must be in the 'cargo_replacements' list." if CARGO_PATH else ""} {cargo_pre_instructions}
 
 Here is an example of a set of replacements:
 
@@ -85,7 +95,7 @@ Here is an example of a set of replacements:
             "original": "use std::collections::HashMap;\nuse std::collections::BTreeMap;",
             "new": "use std::collections::HashMap;",
         }},
-    ]
+    {"    ]" if not CARGO_PATH else cargo_format_instructions}
 }}
 
 Ensure:
@@ -97,8 +107,13 @@ Ensure:
 Only return the list of replacements, do not add comments or labels
 """
     result = call_openai_api_for_patch(prompt)
-    new_code = apply_changes(current_code, result)
-    return new_code, result
+    result_json = json.loads(result)
+    new_code = apply_changes(current_code, result_json["replacements"])
+    if CARGO_PATH:
+        new_toml = apply_changes(current_toml, result_json["cargo_replacements"])
+    else:
+        new_toml = None
+    return result, new_code, new_toml
 
 
 def generate_code_generation_failure_analysis(task_description, current_code, num_attempts, original_task_description):
