@@ -44,10 +44,10 @@ class Oxidizer:
             with Timer("Generating new strategy..."):
                 strategy_prompt = self.strategizer.generate_strategy(self.best_code, self.best_toml)
 
-            result, new_code, new_toml, attempts, time_taken, ending_prompt = self.run_strategy(
+            result, new_code, new_toml, attempts, time_taken = self.run_strategy(
                 strategy_prompt, self.best_code, self.best_toml
             )
-            self.strategizer.add_strategy(ending_prompt, result, attempts, time_taken, self.current_unsafe_lines)
+            self.strategizer.add_strategy(strategy_prompt, result, attempts, time_taken, self.current_unsafe_lines)
 
             if result == StrategyStatus.SUCCESS:
                 self.best_code = new_code
@@ -62,14 +62,14 @@ class Oxidizer:
                 self.logger.log_status("Encountered 10 consecutive failed strategies. Exiting due to lack of progress.")
                 break
 
-    def run_strategy(self, strategy_prompt, current_code, current_toml):
+    def run_strategy(self, strategy_prompt, initial_code, current_toml):
+        current_code = initial_code
         task_description = strategy_prompt
         num_attempts = 0
         strategy_start_time = time.time()
 
         while True:
             attempt_start_time = time.time()
-            self.logger.log_prompt(task_description)
             num_attempts += 1
             if num_attempts > self.MAX_PROMPTS:
                 return (
@@ -78,8 +78,8 @@ class Oxidizer:
                     current_toml,
                     self.MAX_PROMPTS,
                     time.time() - strategy_start_time,
-                    task_description,
                 )
+            self.logger.log_prompt(task_description)
 
             # Step 1: Generate new code via patch file
             step_start_time = time.time()
@@ -87,7 +87,9 @@ class Oxidizer:
                 break_loop = False
                 for generation_attempt in range(1, self.MAX_GENERATION_RETRIES + 1):
                     try:
-                        replacements, new_code, new_toml = generate_code(task_description, current_code, current_toml, generation_attempt, self.logger)
+                        replacements, new_code, new_toml = generate_code(
+                            task_description, current_code, current_toml, generation_attempt, self.logger
+                        )
                         self.logger.log_generated_code(
                             replacements, new_code, new_toml, generation_attempt, time.time() - step_start_time
                         )
@@ -112,6 +114,7 @@ class Oxidizer:
                 if break_loop:
                     continue
 
+            current_code = new_code
             with open(CODE_PATH, "w", encoding="utf-8") as f:
                 f.write(new_code)
 
@@ -126,9 +129,7 @@ class Oxidizer:
                 self.logger.log_status("Compilation ✅", time.time() - step_start_time)
             else:
                 with Timer("Analyzing compilation..."):
-                    analysis = generate_build_analysis(
-                        task_description, new_code, build_output, strategy_prompt, current_code
-                    )
+                    analysis = generate_build_analysis(task_description, current_code, build_output, strategy_prompt)
 
                 if analysis.lower().startswith("good"):
                     self.logger.log_status("Compilation ✅", time.time() - step_start_time)
@@ -173,7 +174,7 @@ class Oxidizer:
 
             # Step 4: Compare lines of unsafe code
             step_start_time = time.time()
-            num_old_unsafe_lines, _ = count_unsafe(current_code)
+            num_old_unsafe_lines, _ = self.current_unsafe_lines
             num_new_unsafe_lines, _ = count_unsafe(new_code)
             self.logger.log_status(
                 f"Result: {num_old_unsafe_lines} unsafe lines -> {num_new_unsafe_lines} unsafe lines"
@@ -183,7 +184,7 @@ class Oxidizer:
                 with Timer("Analyzing why new code is not safer..."):
                     analysis = generate_code_safety_analysis(
                         task_description,
-                        current_code,
+                        initial_code,
                         new_code,
                         num_old_unsafe_lines,
                         num_new_unsafe_lines,
@@ -206,7 +207,6 @@ class Oxidizer:
                             new_toml,
                             num_attempts,
                             time.time() - strategy_start_time,
-                            task_description,
                         )
                     else:
                         return (
@@ -215,7 +215,6 @@ class Oxidizer:
                             new_toml,
                             num_attempts,
                             time.time() - strategy_start_time,
-                            task_description,
                         )
             else:
                 self.logger.log_status("Code safety improved ✅")
@@ -226,7 +225,6 @@ class Oxidizer:
                     new_toml,
                     num_attempts,
                     time.time() - strategy_start_time,
-                    task_description,
                 )
 
 

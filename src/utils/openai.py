@@ -49,15 +49,19 @@ def call_openai_api_for_patch(prompt):
     return completion.choices[0].message.content
 
 def get_task_modification_requirements(original_task_description):
+    cargo_instructions = "You are only modifying the code, so don't try anything that would require adding new packages. You can't edit the Cargo.toml file." if not CARGO_PATH else ""
+
     requirements = f"""For the new task description, you must follow these guidelines:
-- You must preserve the core strategy of the original task description: <{original_task_description}>, with the ultimate goal of modifying the code to reduce the number of unsafe lines
-- This new task description should work where the current one (and the original one) did not
-- Try to keep the new task description as isolated as possible, so it only affects the code in a few specific areas (if possible)
+{cargo_instructions}
+- Remember that the ultimate goal is to reduce the number of unsafe lines.
+- Remember that you are modifying the new code you just made, not the original code.
+- The new task description will be used only with the context of the new code, not the previous errors or the original code. Be very specifc with what to change.
 - Do not explain any reasoning. Just return the new task description."""
-    if not CARGO_PATH:
-        requirements += "\n- You are only modifying the code, so don't try anything that would require adding new packages. You can't edit the Cargo.toml file."
+
     return requirements
 
+global counter
+counter = 0
 def generate_code(task_description, current_code, current_toml, generation_attempt, logger):
     cargo_pre_instructions = {"\nHere is the Cargo.toml file:\n" + current_toml if current_toml else ""}
     cargo_format_instructions = """    ],
@@ -99,13 +103,18 @@ Here is an example of a set of replacements:
 }}
 
 Ensure:
-- There are several unique lines of context in each replacement, so an exact string match can easily be found.
+- There are several unique lines of context in each replacement, and a minimum of 50 characters of context, so an exact string match can easily be found.
 - The replacements should be in the order they appear in the code.
 - Newlines should be preserved.
 - Make sure that open/closing delimiters are matched, and you don't leave any dangling delimiters.
 
 Only return the list of replacements, do not add comments or labels
 """
+    global counter
+    with open(f"prompt{counter}.txt", "w") as f:
+        f.write(prompt)
+    counter += 1
+
     result = call_openai_api_for_patch(prompt)
     logger.log_generation_attempt(result, generation_attempt)
     result_json = json.loads(result)
@@ -135,7 +144,7 @@ Based on this information, modify the task description to make it easier to gene
     return call_openai_api(prompt)
 
 
-def generate_build_analysis(task_description, new_code, build_output, original_task_description, original_code):
+def generate_build_analysis(task_description, new_code, build_output, original_task_description):
 
     prompt = f"""
 You are a software engineering assistant. You were given some code and a task description on how to modify it.
@@ -143,19 +152,16 @@ You are a software engineering assistant. You were given some code and a task de
 Here was the task description:
 {task_description}
 
-Here was the original code:
-{original_code}
-
-Here was the new code you generated:
+Here is the new code you generated:
 {new_code}
 
-The stderr from compiling the code was:
+The output from compiling the code was:
 {build_output}
 
 Based on this information, do you think the modification worked without introducing any significant NEW issues, including easy-to-fix warnings, AND do you think it successfully compiled?
 If the program didn't compile successfully due to something like a bad build command, but it wasn't because of your modification, return "stop: " plus a message to the user on what wen't wrong.
 If you think it DID work, return "good" and your explanation. 
-If you think it didn't work, return "bad: " plus a new task description that will replace the old one, which will then be applied to the original code (the new code will be discarded).
+If you think it didn't work, return "bad: " plus a new task description that will try to fix the new code.
 {get_task_modification_requirements(original_task_description)}
 """
 
@@ -179,7 +185,7 @@ Here was the code you generated:
 The program was compiled successfully, however the output from running the program did not include the expected output.
 {run_output}
 
-Based on this information, make a new, better task description that will modify the original code to generate code that will produce the expected output.
+Based on this information, make a new task description that will try to fix the issue(s).
 {get_task_modification_requirements(original_task_description)}
 """
 
@@ -206,9 +212,9 @@ The program compiled and ran successfully, preserving the original functionality
 
 However, {"the new code has the same number of unsafe lines as the original code" if num_old_unsafe_lines == num_new_unsafe_lines else "the new code has more unsafe lines than the original code"}, so your modification failed. ({num_new_unsafe_lines} new vs {num_old_unsafe_lines} old unsafe lines)
 
-If you must preserve the same rough strategy as the original task description, do you think that it is possible to update the task description to actually make the code safer (less lines of unsafe code)? The original task description's core strategy must be preserved, only the fine details should be changed.
+If you must preserve the same rough strategy as the original task description, do you think that it is possible to update the task description to actually make the code safer (less lines of unsafe code)? If it can even safe ONE LINE, it is worth it.
 If you don't think it is possible to make the code safer using a similar strategy, return "bad: " plus your reasoning. Reasoning should be concise.
-If you think it is possible, return "good: " plus a new task description that will modify the original code to generate code that will produce the expected output. Do not explain any reasoning.
+If you think it is possible, return "good: " plus a new task description that will try to fix the issue(s).
 {get_task_modification_requirements(original_task_description)}
 """
 

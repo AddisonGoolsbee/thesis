@@ -32,24 +32,26 @@ class Strategizer:
         else:
             toml_message = ""
 
-        prompt = f"""
-You are a software engineering assistant. Your goal is to make a rust file safer, as defined by the number of unsafe lines in the code.
+#         prompt = f"""
+# You are a software engineering assistant. Your goal is to make a rust file safer, as defined by the number of unsafe lines in the code.
 
-Here is the current code:
-{current_code}
+# Here is the current code:
+# {current_code}
 
-{toml_message}
+# {toml_message}
 
-{self.get_failed_strategies()}
+# {self.get_failed_strategies()}
 
-Based on the current code, generate a description of a modification strategy that would make the code safer.
-The strategy should be 1-2 sentences, and should only change an isolated amount of the code, instead of making sweeping changes.
-{"You may not change the Cargo.toml file, so don't try to add any dependencies." if not current_toml else ""}
-The strategy should be a single isolated strategy, such as "change this struct to use generic types to isolate the unsafe code (and its uses)" or "change this function to use the rust standard library instead of a c library (and everything that calls it)". 
-Make sure the strategy makes the code SAFER, not just more idiomatic/cleaner/faster. Make sure you include removing the "unsafe" keyword if it will no longer be needed.
-Do not explain your reasoning. Just return the strategy.
-"""
-        strategy = call_openai_api(prompt)
+# Based on the current code, generate a description of a modification strategy that would make the code safer.
+# Your primary goal is to reduce the number of unsafe lines. This includes things like splitting one unsafe function into multiple smaller functions, or moving unsafe code into a separate function.
+# The strategy should be 1-2 sentences, and should only change an isolated amount of the code, instead of making sweeping changes.
+# {"You may not change the Cargo.toml file, so don't try to add any dependencies." if not current_toml else ""}
+# The strategy should be a single isolated strategy, such as "change this struct to use generic types to isolate the unsafe code (and its uses)" or "change this function to use the rust standard library instead of a c library (and everything that calls it)". 
+# Make sure the strategy makes the code SAFER, not just more idiomatic/cleaner/faster. Make sure you include removing the "unsafe" keyword if it will no longer be needed.
+# Do not explain your reasoning. Just return the strategy.
+# """
+#         strategy = call_openai_api(prompt)
+        strategy = "Modify the process_input function such that its unsafe components are isolated in to one or multiple blocks to minimize the number of unsafe lines. Remeber to remove the unsafe keyword from the function."
         self.logger.log_strategy(strategy)
         return strategy
     
