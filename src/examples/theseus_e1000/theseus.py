@@ -16,7 +16,7 @@ error_found = False
 ready_event = threading.Event()
 
 SESSION = "theseus"
-BOOT_CMD = "gmake orun -C ~/Desktop/Theseus/ net=user graphic=no SERIAL1=pty SERIAL2=pty"
+BOOT_CMD = "gmake orun -C ~/Desktop/TheseusM/ net=user graphic=no SERIAL1=pty SERIAL2=pty"
 UNIT_TEST_CMD = "ping 8.8.8.8 -t 2"
 
 

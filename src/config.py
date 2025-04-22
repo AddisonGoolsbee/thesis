@@ -1,8 +1,9 @@
-TARGET = "rfk"
+TARGET = "theseus"
 
+CARGO_PATH = None
 if TARGET == "theseus":
-    CODE_PATH = "/Users/addisongoolsbee/Desktop/Theseus/kernel/e1000/src/lib.rs"
-    BUILD_CMD = "gmake iso -C ~/Desktop/Theseus/ net=user"
+    CODE_PATH = "/Users/addisongoolsbee/Desktop/TheseusM/kernel/e1000_old/src/lib.rs"
+    BUILD_CMD = "gmake iso -C ~/Desktop/TheseusM/ net=user"
     TEST_CMD = "python3 src/examples/theseus_e1000/theseus.py"
     TEST_EXPECTED_OUTPUT = "2 packets transmitted, 2 packets num_received, 0.0% packet loss"
     TEST_TIMEOUT = 15

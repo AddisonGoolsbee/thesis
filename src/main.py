@@ -17,7 +17,7 @@ from config import *
 
 class Oxidizer:
     MAX_GENERATION_RETRIES = 5
-    MAX_PROMPTS = 6
+    MAX_PROMPTS = 10
 
     def __init__(self):
         self.logger = Logger()
