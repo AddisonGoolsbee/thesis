@@ -60,7 +60,7 @@ def get_task_modification_requirements(original_task_description):
     return requirements
 
 def generate_code(task_description, current_code, current_toml, generation_attempt, logger):
-    cargo_pre_instructions = {"\nHere is the Cargo.toml file:\n" + current_toml if current_toml else ""}
+    cargo_pre_instructions = "\nHere is the Cargo.toml file:\n" + current_toml if current_toml else ""
     cargo_format_instructions = """    ],
     "cargo_replacements": [
         {{
@@ -85,12 +85,13 @@ Here is an example of a set of replacements:
 {{
     "replacements": [
         {{
-            "original": "def simple():\n    return a + b",
-            "new": "def simple():\n    return a - b"
+           "original": "fn simple() -> i32 {{\n    a + b\n}}",
+            "new": "fn simple() -> i32 {{\n    a - b\n}}",
         }},
         {{
-            "original": "impl RxQueueRegisters for E1000RxQueueRegisters {{\n    fn set_rdbal(&mut self, value: u32) {{\n        self.0.rx_regs.rdbal.write(value);",
-            "new": "impl RxQueueRegisters for E1000RxQueueRegisters {{\n    fn set_rdbal(&mut self, value: u32) {{\n        self.0.rx_regs.rdbal.write(value); \n    debug!(\"Wrote {{}}\", value);",
+            "original": "impl RxQueueRegisters for E1000RxQueueRegisters {{\n    fn set_rdbal(&mut self, value: u32) {{\n        self.0.rx_regs.rdbal.write(value);\n        debug!(\"Wrote {{}}\", value);\n    }}\n}}",
+            "new": "impl RxQueueRegisters for E1000RxQueueRegisters {{\n    fn set_rdbal(&mut self, value: u32) {{\n        self.0.rx_regs.rdbal.write(value);\n        debug!(\"Wrote {{}}\", value);\n    }}\n}}"
+
         }},
         {{
             "original": "use std::collections::HashMap;\nuse std::collections::BTreeMap;",
@@ -103,9 +104,7 @@ Ensure:
 - There are several unique lines of context in each replacement, so an exact string match can easily be found.
 - The replacements should be in the order they appear in the code.
 - Newlines should be preserved.
-- Make sure that open/closing delimiters are matched, and you don't leave any dangling delimiters.
-
-Only return the list of replacements, do not add comments or labels
+- Make absolutely sure you don't leave any dangling delimiters. Preserve the net delimiter count from the original to the new (if there's one extra {{ in original, there should be one extra {{ in new, etc.)
 """
     result = call_openai_api_for_patch(prompt)
     logger.log_generation_attempt(result, generation_attempt)
