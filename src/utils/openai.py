@@ -59,8 +59,23 @@ def get_task_modification_requirements(original_task_description):
         requirements += "\n- You are only modifying the code, so don't try anything that would require adding new packages. You can't edit the Cargo.toml file."
     return requirements
 
-def generate_code(task_description, current_code, current_toml, generation_attempt, logger):
-    cargo_pre_instructions = {"\nHere is the Cargo.toml file:\n" + current_toml if current_toml else ""}
+def get_build_text(task_description, original_code, replacements, build_output):
+    return f"""You are a software engineering assistant. You were given some code and a task description on how to modify it.
+
+Here was your task description:
+{task_description}
+
+Here was the original code:
+{original_code}
+
+You generated the following replacements file:
+{replacements}
+
+The output from compiling the code with the new replacements was:
+{build_output}"""
+
+def generate_code(task_description, current_code, current_toml, generation_attempt, logger, previous_generation=None, previous_output=None, strategy_prompt=None):
+    cargo_pre_instructions = "\nHere is the Cargo.toml file:\n" + current_toml if current_toml else ""
     cargo_format_instructions = """    ],
     "cargo_replacements": [
         {{
@@ -69,15 +84,26 @@ def generate_code(task_description, current_code, current_toml, generation_attem
         }}
     ]"""
 
-    prompt = f"""
+    if previous_generation:
+        data = json.loads(previous_generation)
+        pretty = json.dumps(data, indent=4)
+        prompt_start = f"""{get_build_text(strategy_prompt, current_code, pretty, previous_output)}
+
+{task_description}
+"""
+    else:
+        prompt_start = f"""
 You are a software engineering assistant. You are given some code and a task description on how to modify it.
 {current_code}
-
 
 Here is the task description:
 {task_description}
 
-Instead of providing new code, provide a json object that represent replacements made to the code. "original" is the original string (must be long enough to be unique in the code), and "new" is the new string which replaces the original.
+Instead of providing new code, provide a json object that represent replacements made to the code. "original" is the original string (must be long enough to be unique in the code), and "new" is the new string which replaces the original."""
+    
+    prompt = f"""
+{prompt_start}
+
 {"All code replacements must be in the 'replacements' list, while any changes to the Cargo.toml file must be in the 'cargo_replacements' list." if CARGO_PATH else ""} {cargo_pre_instructions}
 
 Here is an example of a set of replacements:
@@ -85,12 +111,13 @@ Here is an example of a set of replacements:
 {{
     "replacements": [
         {{
-            "original": "def simple():\n    return a + b",
-            "new": "def simple():\n    return a - b"
+           "original": "fn simple() -> i32 {{\n    a + b\n}}",
+            "new": "fn simple() -> i32 {{\n    a - b\n}}",
         }},
         {{
-            "original": "impl RxQueueRegisters for E1000RxQueueRegisters {{\n    fn set_rdbal(&mut self, value: u32) {{\n        self.0.rx_regs.rdbal.write(value);",
-            "new": "impl RxQueueRegisters for E1000RxQueueRegisters {{\n    fn set_rdbal(&mut self, value: u32) {{\n        self.0.rx_regs.rdbal.write(value); \n    debug!(\"Wrote {{}}\", value);",
+            "original": "impl RxQueueRegisters for E1000RxQueueRegisters {{\n    fn set_rdbal(&mut self, value: u32) {{\n        self.0.rx_regs.rdbal.write(value);\n        debug!(\"Wrote {{}}\", value);\n    }}\n}}",
+            "new": "impl RxQueueRegisters for E1000RxQueueRegisters {{\n    fn set_rdbal(&mut self, value: u32) {{\n        self.0.rx_regs.rdbal.write(value);\n        debug!(\"Wrote {{}}\", value);\n    }}\n}}"
+
         }},
         {{
             "original": "use std::collections::HashMap;\nuse std::collections::BTreeMap;",
@@ -103,10 +130,9 @@ Ensure:
 - There are several unique lines of context in each replacement, so an exact string match can easily be found.
 - The replacements should be in the order they appear in the code.
 - Newlines should be preserved.
-- Make sure that open/closing delimiters are matched, and you don't leave any dangling delimiters.
-
-Only return the list of replacements, do not add comments or labels
+- Make absolutely sure you don't leave any dangling delimiters. Preserve the net delimiter count from the original to the new (if there's one extra {{ in original, there should be one extra {{ in new, etc.)
 """
+    logger.log_verbose(f"<<<Prompt:\n{prompt}>>>{generation_attempt}")
     result = call_openai_api_for_patch(prompt)
     logger.log_generation_attempt(result, generation_attempt)
     result_json = json.loads(result)
@@ -122,7 +148,7 @@ def generate_code_generation_failure_analysis(task_description, current_code, nu
     prompt = f"""
 You are a software engineering assistant. You were given some code and a task description on how to modify it.
 
-Here was the task description:
+Here was your task description:
 {task_description}
 
 Here was the code you generated:
@@ -136,28 +162,15 @@ Based on this information, modify the task description to make it easier to gene
     return call_openai_api(prompt)
 
 
-def generate_build_analysis(task_description, new_code, build_output, original_task_description, original_code):
+def generate_build_analysis(task_description, new_code, build_output, original_task_description, original_code, replacements):
 
     prompt = f"""
-You are a software engineering assistant. You were given some code and a task description on how to modify it.
-
-Here was the task description:
-{task_description}
-
-Here was the original code:
-{original_code}
-
-Here was the new code you generated:
-{new_code}
-
-The stderr from compiling the code was:
-{build_output}
+{get_build_text(task_description, original_code, replacements, build_output)}
 
 Based on this information, do you think the modification worked without introducing any significant NEW issues, including easy-to-fix warnings, AND do you think it successfully compiled?
 If the program didn't compile successfully due to something like a bad build command, but it wasn't because of your modification, return "stop: " plus a message to the user on what wen't wrong.
 If you think it DID work, return "good" and your explanation. 
-If you think it didn't work, return "bad: " plus a new task description that will replace the old one, which will then be applied to the original code (the new code will be discarded).
-{get_task_modification_requirements(original_task_description)}
+If you think it didn't work, return "bad: " plus a description explaining what went wrong, and what needs to be fixed about the replacements file. Do not return anything else such as example code. Be very specific on what needs to be fixed. Do not include placeholders.The description + what needs to be fixed should be concise (if it can be). Make sure to include the "bad: " prefix.
 """
 
     return call_openai_api(prompt)

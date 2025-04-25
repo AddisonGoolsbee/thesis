@@ -66,6 +66,8 @@ class Oxidizer:
         task_description = strategy_prompt
         num_attempts = 0
         strategy_start_time = time.time()
+        previous_generation = None
+        previous_output = None
 
         while True:
             attempt_start_time = time.time()
@@ -82,11 +84,23 @@ class Oxidizer:
 
             # Step 1: Generate new code via patch file
             step_start_time = time.time()
-            with Timer("Generating code..."):
+            with Timer(f"{'Reg' if previous_generation else 'G'}enerating code..."):
                 break_loop = False
                 for generation_attempt in range(1, self.MAX_GENERATION_RETRIES + 1):
                     try:
-                        replacements, new_code, new_toml = generate_code(task_description, current_code, current_toml, generation_attempt, self.logger)
+                        replacements, new_code, new_toml = generate_code(
+                            task_description,
+                            current_code,
+                            current_toml,
+                            generation_attempt,
+                            self.logger,
+                            previous_generation,
+                            previous_output,
+                            strategy_prompt,
+                        )
+                        if previous_generation:
+                            previous_generation = None
+                            previous_output = None
                         self.logger.log_generated_code(
                             replacements, new_code, new_toml, generation_attempt, time.time() - step_start_time
                         )
@@ -126,7 +140,7 @@ class Oxidizer:
             else:
                 with Timer("Analyzing compilation..."):
                     analysis = generate_build_analysis(
-                        task_description, new_code, build_output, strategy_prompt, current_code
+                        task_description, new_code, build_output, strategy_prompt, current_code, replacements
                     )
 
                 if analysis.lower().startswith("good"):
@@ -135,12 +149,15 @@ class Oxidizer:
                     self.logger.log_status("Compilation ❌", time.time() - step_start_time)
                     task_description = analysis[5:]
                     self.logger.log_status(f"Attempt took {time.time() - attempt_start_time:.2f}s")
+                    previous_generation = replacements
+                    previous_output = build_output
                     continue
                 elif analysis.lower().startswith("stop: "):
                     self.logger.log_status("Compilation ❌ (build command error)", time.time() - step_start_time)
                     self.logger.log_status(f"Build command error: {analysis[6:]}")
                     exit(1)
                 else:
+                    self.logger.log_verbose(f"Analysis:\n{analysis}")
                     self.logger.log_status("Analysis unsuccessful, retrying...", time.time() - step_start_time)
                     self.logger.log_status(f"Attempt took {time.time() - attempt_start_time:.2f}s")
                     continue
