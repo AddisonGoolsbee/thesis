@@ -1,0 +1,24 @@
+<html>
+
+<body>
+<h1>Reoxidizer: Idiomizing Rust Code Using Recursive LLMs</h1>
+<h3>Addison Goolsbee </h3>
+<h3>Advised by Lin Zhong</h3>
+<h2>Abstract</h2>
+<p> Can a large language model agent autonomously refactor real-world Rust into the fully idiomatic, unsafe-free style
+    that
+    make the most out of the language's advantages? To probe that question we built Reoxidizer, an open-source CLI that
+    loops through (i) strategy generation, (ii) code patch generation via recursive prompting, and (iii) automated
+    evaluation with compile, test, and idiomatic evaluation steps. The agent targets five design goals—effectiveness,
+    efficiency, adaptability, security, and transparency—and encodes them in version-controlled prompts plus a
+    patch-then-apply workflow that cuts inference cost to 10-20 s per iteration. We benchmark Reoxidizer on three
+    progressively harder programs: a 60-line Quicksort (C2Rust), the 1.5 k-line RobotFindsKitten game (C2Rust), and a
+    modified version of the 700-line Theseus OS e1000 driver. In 15 seconds, the agent removed all 24 unsafe lines from
+    Quicksort; under the same 15-minute budget it trimmed four unsafe lines from RobotFindsKitten and produced no
+    compiling
+    patch for e1000. The study therefore delineates the frontier of current LLM coding agents—effective on localized
+    refactors, brittle on cross-cutting redesigns—and releases an extensible architecture for future research.
+</p>
+</body>
+
+</html>

@@ -69,7 +69,7 @@ def generate_code(task_description, current_code, current_toml, generation_attem
         }}
     ]"""
 
-    prompt = f"""
+    prompt = f""" 
 You are a software engineering assistant. You are given some code and a task description on how to modify it.
 {current_code}
 

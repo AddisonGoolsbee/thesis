@@ -1,4 +1,4 @@
-TARGET = "theseus"
+TARGET = "quicksort"
 
 CARGO_PATH = None
 if TARGET == "theseus":
@@ -20,9 +20,3 @@ elif TARGET == "quicksort":
     TEST_CMD = "./src/examples/quicksort/target/debug/quicksort"
     TEST_EXPECTED_OUTPUT = "[1, 2, 3, 4, 7, 9]"
     TEST_TIMEOUT = 15
-else:
-    CODE_PATH = "temp.rs"
-    BUILD_CMD = f"rustc ./temp.rs -o prog"
-    TEST_CMD = "./prog"
-    TEST_EXPECTED_OUTPUT = "This is a simple Rust program."
-    TEST_TIMEOUT = 3
