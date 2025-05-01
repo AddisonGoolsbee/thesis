@@ -5,17 +5,22 @@
 <h3>Addison Goolsbee </h3>
 <h3>Advised by Lin Zhong</h3>
 <h2>Abstract</h2>
-<p> Can a large language model agent autonomously refactor real-world Rust into the fully idiomatic, unsafe-free style
-    that make the most out of the language's advantages? To probe that question we built Reoxidizer, an open-source CLI that
-    loops through (i) strategy generation, (ii) code patch generation via recursive prompting, and (iii) automated
-    evaluation with compile, test, and idiomatic evaluation steps. The agent targets five design goals—effectiveness,
-    efficiency, adaptability, security, and transparency—and encodes them in version-controlled prompts plus a
-    patch-then-apply workflow that cuts inference cost to 10-20 s per iteration. We benchmark Reoxidizer on three
-    progressively harder programs: a 60-line Quicksort (C2Rust), the 1.5 k-line RobotFindsKitten game (C2Rust), and a
-    modified version of the 700-line Theseus OS e1000 driver. In 15 seconds, the agent removed all 24 unsafe lines from
-    Quicksort; under the same 15-minute budget it trimmed four unsafe lines from RobotFindsKitten and produced no
-    compiling patch for e1000. The study therefore delineates the frontier of current LLM coding agents—effective on localized
-    refactors, brittle on cross-cutting redesigns—and releases an extensible architecture for future research.
+<p> Can a large-language-model (LLM) agent autonomously migrate legacy Rust code to the fully idiomatic, unsafe-free form
+that makes the most out of the language's advantages? To probe that question we built Reoxidizer, an open-source CLI
+that drives GPT-4o through (i) strategy generation, (ii) code patch generation via recursive prompting, and (iii)
+automated evaluation with compile, test, and idiomatic evaluation steps. The architecture is designed around five
+criteria—effectiveness, efficiency, adaptability, security, and transparency—and logs every prompt, diff, and verdict
+for auditability. We benchmark Reoxidizer on three progressively harder artifacts: Quicksort (60 LoC, direct C2Rust
+translation), RobotFindsKitten (1.5 k LoC CLI game), and the Theseus OS e1000 driver (700 LoC kernel module). Within 15
+seconds the agent purged all 24 unsafe lines in Quicksort across two iterations, preserving semantics. Given 15 minutes,
+it only removed four of 460 unsafe lines in RobotFindsKitten while keeping gameplay intact, but on e1000 it failed to
+perform a single positive change. These results delineate today's frontier: LLM agents are surprisingly potent for
+smaller codebases, and Reoxidizer can run on its own, perfecting any given file that is simple enough. However, as
+codebases get larger and more complex, and the challenge of idiomizing the code begins to require hundred-line changes,
+LLM agents still struggle to generate code that even can compile. Our contributions are (i) the first end-to-end agent
+architecture for autonomous Rust idiomization, (ii) an empirical boundary-case analysis of current LLM limits, and (iii)
+a public codebase. We conclude that autonomous idiomization is possible in principle but not yet feasible at scale, and
+closing that gap will demand a concerted team effort of language-tool researchers and LLM engineers.
 </p>
 </body>
 
